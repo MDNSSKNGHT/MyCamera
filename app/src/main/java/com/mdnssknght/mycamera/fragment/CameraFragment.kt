@@ -15,6 +15,7 @@ import android.hardware.camera2.TotalCaptureResult
 import android.media.ExifInterface
 import android.media.Image
 import android.media.ImageReader
+import android.media.MediaScannerConnection
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
@@ -235,6 +236,13 @@ class CameraFragment : Fragment() {
                             Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
                         }
                     }
+
+                    MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(output.absolutePath),
+                        null,
+                        null
+                    )
 
                     // Display the photo taken to the user.
                     lifecycleScope.launch(Dispatchers.Main) {
