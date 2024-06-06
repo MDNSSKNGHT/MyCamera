@@ -433,6 +433,7 @@ class CameraFragment : Fragment() {
             // When the format is RAW we use the DngCreator utility class.
             ImageFormat.RAW_SENSOR -> {
                 val dngCreator = DngCreator(characteristics, result.metadata)
+                    .setOrientation(result.orientation)
                 try {
                     val output = createFile("dng")
                     FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
