@@ -35,6 +35,7 @@ import androidx.navigation.fragment.navArgs
 import com.mdnssknght.mycamera.R
 import com.mdnssknght.mycamera.activity.CameraActivity
 import com.mdnssknght.mycamera.databinding.FragmentCameraBinding
+import com.mdnssknght.mycamera.processor.Processor
 import com.mdnssknght.mycamera.util.OrientationLiveData
 import com.mdnssknght.mycamera.util.computeExifOrientation
 import com.mdnssknght.mycamera.util.getPreviewOutputSize
@@ -437,6 +438,13 @@ class CameraFragment : Fragment() {
                 try {
                     val output = createFile("dng")
                     FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
+                    result.image.let {
+                        Processor.processRaw(
+                            it.planes[0].buffer,
+                            it.planes[0].rowStride / it.planes[0].pixelStride,
+                            it.height
+                        )
+                    }
                     cont.resume(output)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write DNG image to file", exc)
