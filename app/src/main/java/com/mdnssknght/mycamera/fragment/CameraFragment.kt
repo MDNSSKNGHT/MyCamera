@@ -35,6 +35,7 @@ import androidx.navigation.fragment.navArgs
 import com.mdnssknght.mycamera.R
 import com.mdnssknght.mycamera.activity.CameraActivity
 import com.mdnssknght.mycamera.databinding.FragmentCameraBinding
+import com.mdnssknght.mycamera.processing.NativeRawProcessor
 import com.mdnssknght.mycamera.util.OrientationLiveData
 import com.mdnssknght.mycamera.util.computeExifOrientation
 import com.mdnssknght.mycamera.util.getPreviewOutputSize
@@ -225,16 +226,32 @@ class CameraFragment : Fragment() {
                     val output = saveResult(result)
                     Log.d(TAG, "Image saved ${output.absolutePath}")
 
-                    // If the result is a JPEG file, update EXIF metadata with orientation info.
-                    if (output.extension == "jpg") {
-                        ExifInterface(output.absolutePath).let { exif ->
-                            exif.setAttribute(
-                                ExifInterface.TAG_ORIENTATION,
-                                result.orientation.toString()
-                            )
-                            exif.saveAttributes()
-                            Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
+                    when (output.extension) {
+
+                        // If the result is a JPEG file, update EXIF metadata with orientation info.
+                        "jpg" -> {
+                            ExifInterface(output.absolutePath).let { exif ->
+                                exif.setAttribute(
+                                    ExifInterface.TAG_ORIENTATION,
+                                    result.orientation.toString()
+                                )
+                                exif.saveAttributes()
+                                Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
+                            }
                         }
+
+                        // If the result is a RAW file, then pass its data for further processing.
+                        "dng" -> {
+                            result.image.let {
+                                NativeRawProcessor.process(
+                                    it.planes[0].rowStride / it.planes[0].pixelStride,
+                                    it.height,
+                                    it.planes[0].buffer
+                                )
+                            }
+                        }
+
+                        else -> {}
                     }
 
                     MediaScannerConnection.scanFile(
