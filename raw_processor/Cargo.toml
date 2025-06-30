@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 android_logger = "0.15.1"
 jni = "0.21.1"
 log = "0.4.27"
+vulkano = "0.35.1"
