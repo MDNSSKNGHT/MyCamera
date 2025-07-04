@@ -7,11 +7,12 @@ class NativeRawProcessor {
     companion object {
         init {
             System.loadLibrary("raw_processor")
-            init()
         }
 
-        external fun init()
+        external fun nativeInit(): Long
 
-        external fun process(width: Int, height: Int, data: ByteBuffer)
+        external fun nativeFini(handle: Long)
+
+        external fun nativeProcess(handle: Long, width: Int, height: Int, data: ByteBuffer)
     }
 }

@@ -35,7 +35,7 @@ import androidx.navigation.fragment.navArgs
 import com.mdnssknght.mycamera.R
 import com.mdnssknght.mycamera.activity.CameraActivity
 import com.mdnssknght.mycamera.databinding.FragmentCameraBinding
-import com.mdnssknght.mycamera.processing.NativeRawProcessor
+import com.mdnssknght.mycamera.processing.RawProcessor
 import com.mdnssknght.mycamera.util.OrientationLiveData
 import com.mdnssknght.mycamera.util.computeExifOrientation
 import com.mdnssknght.mycamera.util.getPreviewOutputSize
@@ -243,7 +243,7 @@ class CameraFragment : Fragment() {
                         // If the result is a RAW file, then pass its data for further processing.
                         "dng" -> {
                             result.image.let {
-                                NativeRawProcessor.process(
+                                RawProcessor.process(
                                     it.planes[0].rowStride / it.planes[0].pixelStride,
                                     it.height,
                                     it.planes[0].buffer

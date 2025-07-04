@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.mdnssknght.mycamera.databinding.ActivityCameraBinding
+import com.mdnssknght.mycamera.processing.RawProcessor
 
 class CameraActivity : AppCompatActivity() {
 
@@ -14,6 +15,14 @@ class CameraActivity : AppCompatActivity() {
 
         activityCameraBinding = ActivityCameraBinding.inflate(layoutInflater)
         setContentView(activityCameraBinding.root)
+
+        RawProcessor.init()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        RawProcessor.fini()
     }
 
     override fun onResume() {

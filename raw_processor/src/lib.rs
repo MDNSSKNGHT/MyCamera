@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use android_logger::Config;
 use jni::{
     JNIEnv,
     objects::{JByteBuffer, JClass},
-    sys::jint,
+    sys::{jint, jlong},
 };
 use log::{LevelFilter, info};
 use vulkano::{
@@ -12,10 +14,10 @@ use vulkano::{
 };
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_init(
+pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeInit(
     mut _env: JNIEnv,
     _class: JClass,
-) {
+) -> jlong {
     android_logger::init_once(
         Config::default()
             .with_max_level(LevelFilter::Trace)
@@ -68,15 +70,34 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     let _queue = queues.next().unwrap();
 
     info!("Initialized Vulkan device and queue");
+
+    let x = Arc::new(String::from("Passing..."));
+
+    Arc::into_raw(x) as jlong
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_process(
+pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeFini(
     mut _env: JNIEnv,
     _class: JClass,
+    handle: jlong,
+) {
+    unsafe { Arc::from_raw(handle as *const String) };
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeProcess(
+    mut _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
     width: jint,
     height: jint,
     _data: JByteBuffer,
 ) {
+    let x = unsafe { Arc::from_raw(handle as *const String) };
+    info!("handle: {}", x);
     info!("width: {}, height: {}", width, height);
+
+    /* Avoid the inner value from dropping */
+    let _ = Arc::into_raw(x);
 }
