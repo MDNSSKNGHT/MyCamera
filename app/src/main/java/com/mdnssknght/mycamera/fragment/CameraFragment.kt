@@ -54,6 +54,7 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import androidx.navigation.findNavController
 
 class CameraFragment : Fragment() {
     /** Android ViewBinding. */
@@ -66,7 +67,7 @@ class CameraFragment : Fragment() {
 
     /** Host's navigation controller. */
     private val navController: NavController by lazy {
-        Navigation.findNavController(requireActivity(), R.id.fragment_container)
+        requireActivity().findNavController(R.id.fragment_container)
     }
 
     /** Detects characterizes and connects to a new [CameraDevice] (used for all camera operations). */
