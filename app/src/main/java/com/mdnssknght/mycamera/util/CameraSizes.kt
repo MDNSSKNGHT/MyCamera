@@ -46,7 +46,8 @@ fun <T> getPreviewOutputSize(
 
     // If image format is provided, use it to determine supported sizes; else use target class.
     val config = characteristics.get(
-        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
+    )!!
 
     if (format == null) {
         assert(StreamConfigurationMap.isOutputSupportedFor(targetClass))

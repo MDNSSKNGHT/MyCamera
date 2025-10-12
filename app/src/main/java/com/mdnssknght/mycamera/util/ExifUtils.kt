@@ -43,6 +43,7 @@ fun decodeExifOrientation(exifOrientation: Int): Matrix {
             matrix.postScale(-1F, 1F)
             matrix.postRotate(270F)
         }
+
         ExifInterface.ORIENTATION_TRANSVERSE -> {
             matrix.postScale(-1F, 1F)
             matrix.postRotate(90F)

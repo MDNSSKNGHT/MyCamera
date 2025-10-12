@@ -8,10 +8,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.Navigation
-import com.mdnssknght.mycamera.R
-import com.mdnssknght.mycamera.fragment.PermissionsFragmentDirections
 import androidx.navigation.findNavController
+import com.mdnssknght.mycamera.R
 
 private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
