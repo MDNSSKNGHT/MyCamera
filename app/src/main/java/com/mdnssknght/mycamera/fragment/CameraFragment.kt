@@ -410,7 +410,7 @@ class CameraFragment : Fragment() {
                         imageReader.setOnImageAvailableListener(null, null)
 
                         // Clear the queue of images, if there are any left.
-                        while (imageQueue.size > 0) imageQueue.take().close()
+                        while (imageQueue.isNotEmpty()) imageQueue.take().close()
 
                         // Compute EXIF orientation metadata.
                         val rotation = relativeOrientation.value ?: 0
