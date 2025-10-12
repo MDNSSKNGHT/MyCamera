@@ -9,9 +9,14 @@ use jni::{
 use log::{LevelFilter, info};
 use vulkano::{
     VulkanLibrary,
-    device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags},
+    device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
 };
+
+struct Context {
+    device: Arc<Device>,
+    queue: Arc<Queue>,
+}
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeInit(
@@ -55,7 +60,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 
     info!("Queue family with compute {:?}", queue_family_index);
 
-    let (_device, mut queues) = Device::new(
+    let (device, mut queues) = Device::new(
         physical_device,
         DeviceCreateInfo {
             queue_create_infos: vec![QueueCreateInfo {
@@ -67,13 +72,13 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .expect("Failed to create device");
 
-    let _queue = queues.next().unwrap();
+    let queue = queues.next().unwrap();
 
     info!("Initialized Vulkan device and queue");
 
-    let x = Arc::new(String::from("Passing..."));
+    let context = Arc::new(Context { device, queue });
 
-    Arc::into_raw(x) as jlong
+    Arc::into_raw(context) as jlong
 }
 
 #[unsafe(no_mangle)]
@@ -82,7 +87,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     _class: JClass,
     handle: jlong,
 ) {
-    unsafe { Arc::from_raw(handle as *const String) };
+    unsafe { Arc::from_raw(handle as *const Context) };
 }
 
 #[unsafe(no_mangle)]
@@ -94,10 +99,11 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     height: jint,
     _data: JByteBuffer,
 ) {
-    let x = unsafe { Arc::from_raw(handle as *const String) };
-    info!("handle: {}", x);
+    let context = unsafe { Arc::from_raw(handle as *const Context) };
+
+    info!("context: {:?}, {:?}", context.device, context.queue);
     info!("width: {}, height: {}", width, height);
 
     /* Avoid the inner value from dropping */
-    let _ = Arc::into_raw(x);
+    let _ = Arc::into_raw(context);
 }
