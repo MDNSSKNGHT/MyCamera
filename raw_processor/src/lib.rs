@@ -11,11 +11,13 @@ use vulkano::{
     VulkanLibrary,
     device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
+    memory::allocator::StandardMemoryAllocator,
 };
 
 struct Context {
     device: Arc<Device>,
     queue: Arc<Queue>,
+    memory_allocator: Arc<StandardMemoryAllocator>,
 }
 
 #[unsafe(no_mangle)]
@@ -96,7 +98,13 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 
     info!("Initialized Vulkan device and queue");
 
-    let context = Arc::new(Context { device, queue });
+    let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+
+    let context = Arc::new(Context {
+        device,
+        queue,
+        memory_allocator,
+    });
 
     Arc::into_raw(context) as jlong
 }
