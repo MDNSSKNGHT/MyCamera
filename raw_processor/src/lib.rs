@@ -1,4 +1,4 @@
-use std::{panic, sync::Arc};
+use std::{panic, slice, sync::Arc};
 
 use android_logger::Config;
 use jni::{
@@ -9,15 +9,24 @@ use jni::{
 use log::{LevelFilter, error, info};
 use vulkano::{
     VulkanLibrary,
+    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    command_buffer::{
+        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
+        allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
+    },
     device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags},
+    format::Format,
+    image::{Image, ImageCreateInfo, ImageType, ImageUsage},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    memory::allocator::StandardMemoryAllocator,
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
+    sync::{self, GpuFuture},
 };
 
 struct Context {
     device: Arc<Device>,
     queue: Arc<Queue>,
     memory_allocator: Arc<StandardMemoryAllocator>,
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
 }
 
 #[unsafe(no_mangle)]
@@ -99,11 +108,16 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     info!("Initialized Vulkan device and queue");
 
     let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+    let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+        device.clone(),
+        StandardCommandBufferAllocatorCreateInfo::default(),
+    ));
 
     let context = Arc::new(Context {
         device,
         queue,
         memory_allocator,
+        command_buffer_allocator,
     });
 
     Arc::into_raw(context) as jlong
@@ -120,17 +134,74 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeProcess(
-    mut _env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
     handle: jlong,
     width: jint,
     height: jint,
-    _data: JByteBuffer,
+    data: JByteBuffer,
 ) {
     let context = unsafe { Arc::from_raw(handle as *const Context) };
 
-    info!("context: {:?}, {:?}", context.device, context.queue);
-    info!("width: {}, height: {}", width, height);
+    let len = env.get_direct_buffer_capacity(&data).unwrap();
+
+    let buffer = Buffer::new_slice::<u8>(
+        context.memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::TRANSFER_SRC,
+            ..Default::default()
+        },
+        AllocationCreateInfo::default(),
+        len as u64,
+    )
+    .expect("Failed to create buffer");
+
+    /* Lock subbufer and copy the entire RAW data into it */
+    buffer
+        .write()
+        .expect("Failed to lock subbuffer for writing")
+        .copy_from_slice(unsafe {
+            slice::from_raw_parts(env.get_direct_buffer_address(&data).unwrap(), len)
+        });
+
+    let image = Image::new(
+        context.memory_allocator.clone(),
+        ImageCreateInfo {
+            image_type: ImageType::Dim2d,
+            format: Format::R16_UINT,
+            extent: [width as u32, height as u32, 1],
+            usage: ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+        context.command_buffer_allocator.clone(),
+        context.queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit,
+    )
+    .unwrap();
+
+    command_buffer_builder
+        .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image))
+        .unwrap();
+
+    let command_buffer = command_buffer_builder.build().unwrap();
+
+    let future = sync::now(context.device.clone())
+        .then_execute(context.queue.clone(), command_buffer)
+        .unwrap()
+        .then_signal_fence_and_flush()
+        .unwrap();
+
+    future.wait(None).unwrap();
+
+    info!("Everything succeeded!");
 
     /* Avoid the inner value from dropping */
     let _ = Arc::into_raw(context);
