@@ -11,13 +11,16 @@ use vulkano::{
     VulkanLibrary,
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
+        AutoCommandBufferBuilder, CommandBufferUsage,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
     },
     descriptor_set::{
         DescriptorSet, WriteDescriptorSet, allocator::StandardDescriptorSetAllocator,
     },
-    device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags},
+    device::{
+        Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
+        QueueFlags,
+    },
     format::Format,
     image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
@@ -40,9 +43,11 @@ struct Context {
 #[derive(BufferContents)]
 #[repr(C)]
 struct Parameters {
-    color_gains: [f32; 4],
+    width: u32,
+    height: u32,
     white_level: u32,
     black_level: u32,
+    color_gains: [f32; 4],
 }
 
 #[unsafe(no_mangle)]
@@ -91,8 +96,12 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     let physical_device = instance
         .enumerate_physical_devices()
         .expect("Failed to enumerate physical devices")
-        .next()
-        .expect("Failed to find physical device");
+        .find(|physical_device| {
+            physical_device
+                .supported_extensions()
+                .khr_shader_float16_int8
+        })
+        .expect("Failed to find suitable physical device");
 
     let queue_family_index = physical_device
         .queue_family_properties()
@@ -114,6 +123,16 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
                 queue_family_index,
                 ..Default::default()
             }],
+            enabled_extensions: DeviceExtensions {
+                khr_16bit_storage: true,
+                khr_shader_float16_int8: true,
+                ..Default::default()
+            },
+            enabled_features: DeviceFeatures {
+                storage_buffer16_bit_access: true,
+                shader_float16: true,
+                ..Default::default()
+            },
             ..Default::default()
         },
     )
@@ -164,7 +183,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     let buffer = Buffer::new_slice::<u8>(
         context.memory_allocator.clone(),
         BufferCreateInfo {
-            usage: BufferUsage::TRANSFER_SRC,
+            usage: BufferUsage::TRANSFER_SRC | BufferUsage::STORAGE_BUFFER,
             ..Default::default()
         },
         AllocationCreateInfo::default(),
@@ -184,7 +203,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         context.memory_allocator.clone(),
         ImageCreateInfo {
             image_type: ImageType::Dim2d,
-            format: Format::R16_UINT,
+            format: Format::R16_SFLOAT,
             extent: [width as u32, height as u32, 1],
             usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
             ..Default::default()
@@ -233,7 +252,10 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     let set = DescriptorSet::new(
         descriptor_set_allocator.clone(),
         layout.clone(),
-        [WriteDescriptorSet::image_view(0, image_view)],
+        [
+            WriteDescriptorSet::buffer(0, buffer.clone()),
+            WriteDescriptorSet::image_view(1, image_view),
+        ],
         [],
     )
     .unwrap();
@@ -246,14 +268,14 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     .unwrap();
 
     let constants = Parameters {
-        color_gains: [1.0, 1.0, 1.0, 1.0],
+        width: width as u32,
+        height: height as u32,
         white_level: 1023,
         black_level: 0,
+        color_gains: [1.0, 1.0, 1.0, 1.0],
     };
 
     command_buffer_builder
-        .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image))
-        .unwrap()
         .bind_pipeline_compute(compute_pipeline.clone())
         .unwrap()
         .push_constants(compute_pipeline.layout().clone(), 0, constants)
