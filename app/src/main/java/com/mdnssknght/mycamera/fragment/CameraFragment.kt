@@ -362,7 +362,15 @@ class CameraFragment : Fragment() {
 
         val captureRequest =
             session.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-                .apply { addTarget(imageReader.surface) }
+                .apply {
+                    addTarget(imageReader.surface)
+                    set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_OFF)
+                    set(
+                        CaptureRequest.COLOR_CORRECTION_MODE,
+                        CaptureRequest.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX
+                    )
+                    set(CaptureRequest.SHADING_MODE, CaptureRequest.SHADING_MODE_OFF)
+                }
 
         session.capture(captureRequest.build(), object : CameraCaptureSession.CaptureCallback() {
 
