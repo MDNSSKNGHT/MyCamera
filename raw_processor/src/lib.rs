@@ -14,11 +14,19 @@ use vulkano::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
     },
+    descriptor_set::{
+        DescriptorSet, WriteDescriptorSet, allocator::StandardDescriptorSetAllocator,
+    },
     device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags},
     format::Format,
-    image::{Image, ImageCreateInfo, ImageType, ImageUsage},
+    image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
+    pipeline::{
+        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+        PipelineShaderStageCreateInfo, compute::ComputePipelineCreateInfo,
+        layout::PipelineDescriptorSetLayoutCreateInfo,
+    },
     sync::{self, GpuFuture},
 };
 
@@ -170,13 +178,55 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
             image_type: ImageType::Dim2d,
             format: Format::R16_UINT,
             extent: [width as u32, height as u32, 1],
-            usage: ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
+            usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
             ..Default::default()
         },
         AllocationCreateInfo {
             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
             ..Default::default()
         },
+    )
+    .unwrap();
+
+    let image_view = ImageView::new_default(image.clone()).unwrap();
+
+    mod cs {
+        vulkano_shaders::shader! {
+            ty: "compute",
+            path: "shader/main.glsl"
+        }
+    }
+
+    let shader = cs::load(context.device.clone()).expect("Failed to create shader module");
+
+    let compute_shader = shader.entry_point("main").unwrap();
+    let stage = PipelineShaderStageCreateInfo::new(compute_shader);
+    let layout = PipelineLayout::new(
+        context.device.clone(),
+        PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+            .into_pipeline_layout_create_info(context.device.clone())
+            .unwrap(),
+    )
+    .unwrap();
+
+    let compute_pipeline = ComputePipeline::new(
+        context.device.clone(),
+        None,
+        ComputePipelineCreateInfo::stage_layout(stage, layout),
+    )
+    .expect("Failed to create compute pipeline");
+
+    let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+        context.device.clone(),
+        Default::default(),
+    ));
+
+    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+    let set = DescriptorSet::new(
+        descriptor_set_allocator.clone(),
+        layout.clone(),
+        [WriteDescriptorSet::image_view(0, image_view)],
+        [],
     )
     .unwrap();
 
@@ -189,7 +239,22 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 
     command_buffer_builder
         .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image))
+        .unwrap()
+        .bind_pipeline_compute(compute_pipeline.clone())
+        .unwrap()
+        .bind_descriptor_sets(
+            PipelineBindPoint::Compute,
+            compute_pipeline.layout().clone(),
+            0,
+            set,
+        )
         .unwrap();
+
+    unsafe {
+        command_buffer_builder
+            .dispatch([width as u32 / 4, height as u32 / 4, 1])
+            .unwrap();
+    }
 
     let command_buffer = command_buffer_builder.build().unwrap();
 
