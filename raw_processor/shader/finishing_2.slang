@@ -1,8 +1,6 @@
 /* Malvar-He-Cutler */
 
-Texture2D<half> bayer;
-
-RWTexture2D<half3> rgb;
+RWTexture2D<half4> bayer;
 
 [[vk::push_constant]]
 cbuffer Params {
@@ -14,7 +12,7 @@ params;
 float sample_bayer(uint2 coord, uint x, uint y) {
   uint new_x = clamp(coord.x + x, 0, params.width - 1);
   uint new_y = clamp(coord.y + y, 0, params.height - 1);
-  return bayer[uint2(new_x, new_y)];
+  return bayer[uint2(new_x, new_y)].a;
 }
 
 [Shader("compute")]
@@ -25,7 +23,7 @@ void main(uint3 threadId: SV_DispatchThreadID) {
   uint x_phase = coord.x & 1;
   uint y_phase = coord.y & 1;
 
-  float3 pixel = float3(0.0);
+  float4 pixel = float4(0.0);
 
   switch (y_phase * 2 + x_phase) {
   case 0: /* Red */
@@ -44,6 +42,7 @@ void main(uint3 threadId: SV_DispatchThreadID) {
          sample_bayer(coord, -1, 1) * 4.0 + sample_bayer(coord, 1, 1) * 4.0 -
          sample_bayer(coord, 0, 2) * 3.0) /
         16.0;
+    pixel.a = sample_bayer(coord, 0, 0);
     break;
   case 1: /* Green odd */
     pixel.r =
@@ -63,6 +62,7 @@ void main(uint3 threadId: SV_DispatchThreadID) {
          sample_bayer(coord, -1, 1) * 2.0 - sample_bayer(coord, 1, 1) * 2.0 +
          sample_bayer(coord, 0, 2)) /
         16.0;
+    pixel.a = sample_bayer(coord, 0, 0);
     break;
   case 2: /* Green even */
     pixel.r =
@@ -82,6 +82,7 @@ void main(uint3 threadId: SV_DispatchThreadID) {
          sample_bayer(coord, -1, 1) * 2.0 - sample_bayer(coord, 1, 1) * 2.0 +
          sample_bayer(coord, 0, 2)) /
         16.0;
+    pixel.a = sample_bayer(coord, 0, 0);
     break;
   case 3: /* Blue */
     pixel.r =
@@ -99,8 +100,9 @@ void main(uint3 threadId: SV_DispatchThreadID) {
          sample_bayer(coord, 0, 2) * 2.0) /
         16.0;
     pixel.b = sample_bayer(coord, 0, 0);
+    pixel.a = sample_bayer(coord, 0, 0);
     break;
   }
 
-  rgb[coord] = half3(pixel);
+  bayer[coord] = half4(pixel);
 }

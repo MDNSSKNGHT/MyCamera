@@ -1,5 +1,5 @@
 StructuredBuffer<uint16_t> in;
-RWTexture2D<half> bayer;
+RWTexture2D<half4> bayer;
 
 [[vk::push_constant]]
 cbuffer Params {
@@ -27,5 +27,6 @@ void main(uint3 threadId: SV_DispatchThreadID) {
 
   float colorGain = half(params.colorGains[yPhase * 2 + xPhase]);
 
-  bayer[coord] = half(clamp(corrected * colorGain, 0.0, 1.0));
+  bayer[coord] =
+      half4(0.0h, 0.0h, 0.0h, half(clamp(corrected * colorGain, 0.0h, 1.0h)));
 }

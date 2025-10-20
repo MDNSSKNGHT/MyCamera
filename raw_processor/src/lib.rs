@@ -203,9 +203,9 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         context.memory_allocator.clone(),
         ImageCreateInfo {
             image_type: ImageType::Dim2d,
-            format: Format::R16_SFLOAT,
+            format: Format::R16G16B16A16_SFLOAT,
             extent: [width as u32, height as u32, 1],
-            usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
+            usage: ImageUsage::STORAGE,
             ..Default::default()
         },
         AllocationCreateInfo {
