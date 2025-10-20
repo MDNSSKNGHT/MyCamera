@@ -9,7 +9,7 @@ use jni::{
 use log::{LevelFilter, error, info};
 use vulkano::{
     VulkanLibrary,
-    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
@@ -35,6 +35,14 @@ struct Context {
     queue: Arc<Queue>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+}
+
+#[derive(BufferContents)]
+#[repr(C)]
+struct Parameters {
+    color_gains: [f32; 4],
+    white_level: u32,
+    black_level: u32,
 }
 
 #[unsafe(no_mangle)]
@@ -190,14 +198,14 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 
     let image_view = ImageView::new_default(image.clone()).unwrap();
 
-    mod cs {
+    mod finishing_1 {
         vulkano_shaders::shader! {
             ty: "compute",
-            path: "shader/main.glsl"
+            path: "shader/finishing_1.glsl"
         }
     }
 
-    let shader = cs::load(context.device.clone()).expect("Failed to create shader module");
+    let shader = finishing_1::load(context.device.clone()).expect("Failed to create shader module");
 
     let compute_shader = shader.entry_point("main").unwrap();
     let stage = PipelineShaderStageCreateInfo::new(compute_shader);
@@ -237,10 +245,18 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .unwrap();
 
+    let constants = Parameters {
+        color_gains: [1.0, 1.0, 1.0, 1.0],
+        white_level: 1023,
+        black_level: 0,
+    };
+
     command_buffer_builder
         .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image))
         .unwrap()
         .bind_pipeline_compute(compute_pipeline.clone())
+        .unwrap()
+        .push_constants(compute_pipeline.layout().clone(), 0, constants)
         .unwrap()
         .bind_descriptor_sets(
             PipelineBindPoint::Compute,
