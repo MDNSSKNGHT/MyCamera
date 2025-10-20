@@ -38,6 +38,7 @@ struct Context {
     queue: Arc<Queue>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 }
 
 #[derive(BufferContents)]
@@ -147,12 +148,17 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         device.clone(),
         StandardCommandBufferAllocatorCreateInfo::default(),
     ));
+    let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+        device.clone(),
+        Default::default(),
+    ));
 
     let context = Arc::new(Context {
         device,
         queue,
         memory_allocator,
         command_buffer_allocator,
+        descriptor_set_allocator,
     });
 
     Arc::into_raw(context) as jlong
@@ -243,14 +249,9 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .expect("Failed to create compute pipeline");
 
-    let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
-        context.device.clone(),
-        Default::default(),
-    ));
-
     let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
     let set = DescriptorSet::new(
-        descriptor_set_allocator.clone(),
+        context.descriptor_set_allocator.clone(),
         layout.clone(),
         [
             WriteDescriptorSet::buffer(0, buffer.clone()),
