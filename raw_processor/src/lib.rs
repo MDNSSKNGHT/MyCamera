@@ -25,11 +25,7 @@ use vulkano::{
     image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
-    pipeline::{
-        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
-        PipelineShaderStageCreateInfo, compute::ComputePipelineCreateInfo,
-        layout::PipelineDescriptorSetLayoutCreateInfo,
-    },
+    pipeline::{Pipeline, PipelineBindPoint},
     sync::{self, GpuFuture},
 };
 
@@ -227,22 +223,24 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     let finishing_1 =
         shader::finishing_1::load(context.device.clone()).expect("Failed to create shader module");
 
-    let compute_shader = finishing_1.entry_point("main").unwrap();
-    let stage = PipelineShaderStageCreateInfo::new(compute_shader);
-    let layout = PipelineLayout::new(
-        context.device.clone(),
-        PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
-            .into_pipeline_layout_create_info(context.device.clone())
-            .unwrap(),
-    )
-    .unwrap();
+    // let compute_shader = finishing_1.entry_point("main").unwrap();
+    // let stage = PipelineShaderStageCreateInfo::new(compute_shader);
+    // let layout = PipelineLayout::new(
+    //     context.device.clone(),
+    //     PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+    //         .into_pipeline_layout_create_info(context.device.clone())
+    //         .unwrap(),
+    // )
+    // .unwrap();
 
-    let compute_pipeline = ComputePipeline::new(
-        context.device.clone(),
-        None,
-        ComputePipelineCreateInfo::stage_layout(stage, layout),
-    )
-    .expect("Failed to create compute pipeline");
+    // let compute_pipeline = ComputePipeline::new(
+    //     context.device.clone(),
+    //     None,
+    //     ComputePipelineCreateInfo::stage_layout(stage, layout),
+    // )
+    // .expect("Failed to create compute pipeline");
+
+    let compute_pipeline = pipeline::create_compute_pipeline_from(&context.device, finishing_1);
 
     let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
     let set = DescriptorSet::new(
