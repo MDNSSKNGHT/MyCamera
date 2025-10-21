@@ -33,6 +33,9 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
+mod pipeline;
+mod shader;
+
 struct Context {
     device: Arc<Device>,
     queue: Arc<Queue>,
@@ -44,11 +47,9 @@ struct Context {
 #[derive(BufferContents)]
 #[repr(C)]
 struct Parameters {
-    width: u32,
-    height: u32,
+    stride: u32,
     white_level: u32,
     black_level: u32,
-    color_gains: [f32; 4],
 }
 
 #[unsafe(no_mangle)]
@@ -131,7 +132,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
             },
             enabled_features: DeviceFeatures {
                 storage_buffer16_bit_access: true,
-                shader_float16: true,
+                shader_int16: true,
                 ..Default::default()
             },
             ..Default::default()
@@ -209,7 +210,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         context.memory_allocator.clone(),
         ImageCreateInfo {
             image_type: ImageType::Dim2d,
-            format: Format::R16G16B16A16_SFLOAT,
+            format: Format::R32_SFLOAT,
             extent: [width as u32, height as u32, 1],
             usage: ImageUsage::STORAGE,
             ..Default::default()
@@ -223,16 +224,10 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 
     let image_view = ImageView::new_default(image.clone()).unwrap();
 
-    mod finishing_1 {
-        vulkano_shaders::shader! {
-            ty: "compute",
-            path: "shader/finishing_1.glsl"
-        }
-    }
+    let finishing_1 =
+        shader::finishing_1::load(context.device.clone()).expect("Failed to create shader module");
 
-    let shader = finishing_1::load(context.device.clone()).expect("Failed to create shader module");
-
-    let compute_shader = shader.entry_point("main").unwrap();
+    let compute_shader = finishing_1.entry_point("main").unwrap();
     let stage = PipelineShaderStageCreateInfo::new(compute_shader);
     let layout = PipelineLayout::new(
         context.device.clone(),
@@ -269,11 +264,9 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     .unwrap();
 
     let constants = Parameters {
-        width: width as u32,
-        height: height as u32,
+        stride: width as u32,
         white_level: 1023,
         black_level: 0,
-        color_gains: [1.0, 1.0, 1.0, 1.0],
     };
 
     command_buffer_builder

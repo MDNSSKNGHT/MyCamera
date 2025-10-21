@@ -1,32 +1,25 @@
-StructuredBuffer<uint16_t> in;
-RWTexture2D<half4> bayer;
+/* 16-bit unsigned integer RAW buffer data */
+StructuredBuffer<uint16_t> rawBuffer;
 
-[[vk::push_constant]]
-cbuffer Params {
-  uint width;
-  uint height;
+/* 32-bit floating point normalized bayer data */
+RWTexture2D<float> bayerBuffer;
 
+[vk::push_constant]
+cbuffer Parameters {
+  uint stride;
   uint whiteLevel;
   uint blackLevel;
-
-  float4 colorGains;
 }
 params;
 
 [Shader("compute")]
 [NumThreads(4, 4, 1)]
 void main(uint3 threadId: SV_DispatchThreadID) {
-  uint2 coord = threadId.xy;
+  uint2 coordinates = threadId.xy;
 
-  uint16_t pixel = in[coord.y * params.width + coord.x];
-  float corrected = float(pixel - params.blackLevel) /
-                    float(params.whiteLevel - params.blackLevel);
+  float pixel = float(rawBuffer[coordinates.y * params.stride + coordinates.x]);
+  float normalized = float(pixel - params.blackLevel) /
+                     float(params.whiteLevel - params.blackLevel);
 
-  uint xPhase = coord.x & 1;
-  uint yPhase = coord.y & 1;
-
-  float colorGain = half(params.colorGains[yPhase * 2 + xPhase]);
-
-  bayer[coord] =
-      half4(0.0h, 0.0h, 0.0h, half(clamp(corrected * colorGain, 0.0h, 1.0h)));
+  bayerBuffer[coordinates] = normalized;
 }
