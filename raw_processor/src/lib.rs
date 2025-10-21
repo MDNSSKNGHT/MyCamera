@@ -9,7 +9,7 @@ use jni::{
 use log::{LevelFilter, error, info};
 use vulkano::{
     VulkanLibrary,
-    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
@@ -29,6 +29,7 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
+mod params;
 mod pipeline;
 mod shader;
 
@@ -38,14 +39,6 @@ struct Context {
     memory_allocator: Arc<StandardMemoryAllocator>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-}
-
-#[derive(BufferContents)]
-#[repr(C)]
-struct Parameters {
-    stride: u32,
-    white_level: u32,
-    black_level: u32,
 }
 
 #[unsafe(no_mangle)]
@@ -261,7 +254,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .unwrap();
 
-    let constants = Parameters {
+    let constants = params::Stage1Parameters {
         stride: width as u32,
         white_level: 1023,
         black_level: 0,

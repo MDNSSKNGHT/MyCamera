@@ -5,7 +5,7 @@ StructuredBuffer<uint16_t> rawBuffer;
 RWTexture2D<float> bayerBuffer;
 
 [vk::push_constant]
-cbuffer Parameters {
+cbuffer Stage1Parameters {
   uint stride;
   uint whiteLevel;
   uint blackLevel;

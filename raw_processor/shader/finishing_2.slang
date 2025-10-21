@@ -5,7 +5,7 @@ Texture2D<float> bayerBuffer;
 RWTexture2D<float3> rgbBuffer;
 
 [vk_push_constant]
-cbuffer Params {
+cbuffer Stage2Parameters {
   uint width;
   uint height;
 }
