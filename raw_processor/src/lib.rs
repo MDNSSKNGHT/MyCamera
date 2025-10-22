@@ -14,9 +14,7 @@ use vulkano::{
         AutoCommandBufferBuilder, CommandBufferUsage,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
     },
-    descriptor_set::{
-        DescriptorSet, WriteDescriptorSet, allocator::StandardDescriptorSetAllocator,
-    },
+    descriptor_set::{WriteDescriptorSet, allocator::StandardDescriptorSetAllocator},
     device::{
         Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
         QueueFlags,
@@ -25,9 +23,10 @@ use vulkano::{
     image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
-    pipeline::{Pipeline, PipelineBindPoint},
     sync::{self, GpuFuture},
 };
+
+use crate::params::Stage1Parameters;
 
 mod params;
 mod pipeline;
@@ -233,19 +232,18 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     // )
     // .expect("Failed to create compute pipeline");
 
-    let compute_pipeline = pipeline::create_compute_pipeline_from(&context.device, finishing_1);
+    let compute_pipeline =
+        pipeline::create_compute_pipeline_from(context.device.clone(), finishing_1);
 
-    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
-    let set = DescriptorSet::new(
+    let descriptor_set = pipeline::create_descriptor_sets(
         context.descriptor_set_allocator.clone(),
-        layout.clone(),
+        compute_pipeline.clone(),
         [
             WriteDescriptorSet::buffer(0, buffer.clone()),
             WriteDescriptorSet::image_view(1, image_view),
         ],
         [],
-    )
-    .unwrap();
+    );
 
     let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
         context.command_buffer_allocator.clone(),
@@ -254,30 +252,36 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .unwrap();
 
-    let constants = params::Stage1Parameters {
-        stride: width as u32,
-        white_level: 1023,
-        black_level: 0,
-    };
+    command_buffer_builder = pipeline::bind_and_dispatch_pipeline_with_constants(
+        command_buffer_builder,
+        compute_pipeline,
+        Stage1Parameters {
+            stride: width as u32,
+            white_level: 1023,
+            black_level: 0,
+        },
+        descriptor_set,
+        [width as u32 / 4, height as u32 / 4, 1],
+    );
 
-    command_buffer_builder
-        .bind_pipeline_compute(compute_pipeline.clone())
-        .unwrap()
-        .push_constants(compute_pipeline.layout().clone(), 0, constants)
-        .unwrap()
-        .bind_descriptor_sets(
-            PipelineBindPoint::Compute,
-            compute_pipeline.layout().clone(),
-            0,
-            set,
-        )
-        .unwrap();
+    // command_buffer_builder
+    //     .bind_pipeline_compute(compute_pipeline.clone())
+    //     .unwrap()
+    //     .push_constants(compute_pipeline.layout().clone(), 0, constants)
+    //     .unwrap()
+    //     .bind_descriptor_sets(
+    //         PipelineBindPoint::Compute,
+    //         compute_pipeline.layout().clone(),
+    //         0,
+    //         set,
+    //     )
+    //     .unwrap();
 
-    unsafe {
-        command_buffer_builder
-            .dispatch([width as u32 / 4, height as u32 / 4, 1])
-            .unwrap();
-    }
+    // unsafe {
+    //     command_buffer_builder
+    //         .dispatch([width as u32 / 4, height as u32 / 4, 1])
+    //         .unwrap();
+    // }
 
     let command_buffer = command_buffer_builder.build().unwrap();
 
