@@ -1,8 +1,8 @@
 /* 32-bit floating point normalized bayer data */
-Texture2D<float> bayerBuffer;
+RWTexture2D<float> bayerBuffer;
 
 /* 32-bit floating point normalized RGB debayered data */
-RWTexture2D<float3> rgbBuffer;
+RWTexture2D<float4> rgbBuffer;
 
 [vk_push_constant]
 cbuffer Stage2Parameters {
@@ -27,7 +27,7 @@ void main(uint3 threadId: SV_DispatchThreadID) {
 
   uint index = yPhase * 2 + xPhase;
 
-  float3 rgb = float3(0.0);
+  float4 rgb = float4(0.0);
 
   /* Pass color filter arrangement */
   switch (index) {
