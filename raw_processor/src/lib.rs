@@ -26,8 +26,6 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
-use crate::params::Stage1Parameters;
-
 mod params;
 mod pipeline;
 mod shader;
@@ -240,7 +238,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         compute_pipeline.clone(),
         [
             WriteDescriptorSet::buffer(0, buffer.clone()),
-            WriteDescriptorSet::image_view(1, image_view),
+            WriteDescriptorSet::image_view(1, image_view.clone()),
         ],
         [],
     );
@@ -255,10 +253,55 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     command_buffer_builder = pipeline::bind_and_dispatch_pipeline_with_constants(
         command_buffer_builder,
         compute_pipeline,
-        Stage1Parameters {
+        params::Stage1Parameters {
             stride: width as u32,
             white_level: 1023,
             black_level: 0,
+        },
+        descriptor_set,
+        [width as u32 / 4, height as u32 / 4, 1],
+    );
+
+    let rgb = Image::new(
+        context.memory_allocator.clone(),
+        ImageCreateInfo {
+            image_type: ImageType::Dim2d,
+            format: Format::R32G32B32A32_SFLOAT,
+            extent: [width as u32, height as u32, 1],
+            usage: ImageUsage::STORAGE,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let rgb_view = ImageView::new_default(rgb.clone()).unwrap();
+
+    let finishing_2 =
+        shader::finishing_2::load(context.device.clone()).expect("Failed to create shader module");
+
+    let compute_pipeline =
+        pipeline::create_compute_pipeline_from(context.device.clone(), finishing_2);
+
+    let descriptor_set = pipeline::create_descriptor_sets(
+        context.descriptor_set_allocator.clone(),
+        compute_pipeline.clone(),
+        [
+            WriteDescriptorSet::image_view(0, image_view),
+            WriteDescriptorSet::image_view(1, rgb_view),
+        ],
+        [],
+    );
+
+    command_buffer_builder = pipeline::bind_and_dispatch_pipeline_with_constants(
+        command_buffer_builder,
+        compute_pipeline,
+        params::Stage2Parameters {
+            width: width as u32,
+            height: height as u32,
         },
         descriptor_set,
         [width as u32 / 4, height as u32 / 4, 1],
