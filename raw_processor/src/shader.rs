@@ -8,6 +8,6 @@ pub mod finishing_1 {
 pub mod finishing_2 {
     vulkano_shaders::shader! {
         ty: "compute",
-        path: "shader/finishing_1.glsl"
+        path: "shader/finishing_2.glsl"
     }
 }
