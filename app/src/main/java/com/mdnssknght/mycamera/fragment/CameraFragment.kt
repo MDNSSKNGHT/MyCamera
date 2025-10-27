@@ -30,7 +30,7 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
-import androidx.navigation.Navigation
+import androidx.navigation.findNavController
 import androidx.navigation.fragment.navArgs
 import com.mdnssknght.mycamera.R
 import com.mdnssknght.mycamera.activity.CameraActivity
@@ -66,7 +66,7 @@ class CameraFragment : Fragment() {
 
     /** Host's navigation controller. */
     private val navController: NavController by lazy {
-        Navigation.findNavController(requireActivity(), R.id.fragment_container)
+        requireActivity().findNavController(R.id.fragment_container)
     }
 
     /** Detects characterizes and connects to a new [CameraDevice] (used for all camera operations). */
