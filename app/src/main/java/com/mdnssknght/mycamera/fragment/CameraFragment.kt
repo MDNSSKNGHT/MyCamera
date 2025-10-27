@@ -12,7 +12,6 @@ import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.DngCreator
 import android.hardware.camera2.TotalCaptureResult
-import android.media.ExifInterface
 import android.media.Image
 import android.media.ImageReader
 import android.media.MediaScannerConnection
@@ -27,6 +26,7 @@ import android.view.SurfaceHolder
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.graphics.drawable.toDrawable
+import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
@@ -401,7 +401,8 @@ class CameraFragment : Fragment() {
                         // Dequeue images while timestamps don't match.
                         val image = imageQueue.take()
                         if (image.format != ImageFormat.DEPTH_JPEG &&
-                            image.timestamp != resultTimestamp) continue
+                            image.timestamp != resultTimestamp
+                        ) continue
                         Log.d(TAG, "Matching image dequeued: ${image.timestamp}")
 
                         // Unset the image reader listener.
@@ -418,8 +419,11 @@ class CameraFragment : Fragment() {
                         val exifOrientation = computeExifOrientation(rotation, mirrored)
 
                         // Build the result and resume progress.
-                        cont.resume(CombinedCaptureResult(
-                            image, result, exifOrientation, imageReader.imageFormat))
+                        cont.resume(
+                            CombinedCaptureResult(
+                                image, result, exifOrientation, imageReader.imageFormat
+                            )
+                        )
 
                         // There is no need to break out of the loop, this coroutine will suspend.
                     }
