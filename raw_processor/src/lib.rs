@@ -14,11 +14,19 @@ use vulkano::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
     },
-    device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags},
+    descriptor_set::{
+        DescriptorSet, WriteDescriptorSet, allocator::StandardDescriptorSetAllocator,
+    },
+    device::{Device, DeviceCreateInfo, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags},
     format::Format,
-    image::{Image, ImageCreateInfo, ImageUsage},
+    image::{Image, ImageCreateInfo, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
+    pipeline::{
+        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+        PipelineShaderStageCreateInfo, compute::ComputePipelineCreateInfo,
+        layout::PipelineDescriptorSetLayoutCreateInfo,
+    },
     sync::{self, GpuFuture},
 };
 
@@ -26,6 +34,7 @@ struct Context {
     device: Arc<Device>,
     queue: Arc<Queue>,
     memory_allocator: Arc<StandardMemoryAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
 }
 
@@ -72,6 +81,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .unwrap();
 
+    // TODO: Find actual suitable device
     let physical_device = instance
         .enumerate_physical_devices()
         .expect("Failed to enumerate physical devices")
@@ -98,6 +108,11 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
                 queue_family_index,
                 ..Default::default()
             }],
+            enabled_features: DeviceFeatures {
+                shader_int16: true,
+                shader_float16: true,
+                ..Default::default()
+            },
             ..Default::default()
         },
     )
@@ -106,10 +121,10 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     let queue = queues.next().unwrap();
 
     let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-    // let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
-    //     device.clone(),
-    //     Default::default(),
-    // ));
+    let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+        device.clone(),
+        Default::default(),
+    ));
     let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
         device.clone(),
         StandardCommandBufferAllocatorCreateInfo::default(),
@@ -119,6 +134,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         device,
         queue,
         memory_allocator,
+        descriptor_set_allocator,
         command_buffer_allocator,
     });
 
@@ -145,7 +161,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
 ) {
     let context = unsafe { Arc::from_raw(handle as *const Context) };
 
-    let (_, cb_copy_to_raw_image) = {
+    let (_, bayer_view, cb_copy_to_bayer_image) = {
         let len = env.get_direct_buffer_capacity(&data).unwrap();
 
         let buffer = Buffer::new_slice::<u8>(
@@ -183,6 +199,8 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         )
         .unwrap();
 
+        let view = ImageView::new_default(image.clone()).unwrap();
+
         let mut cbb = AutoCommandBufferBuilder::primary(
             context.command_buffer_allocator.clone(),
             context.queue.queue_family_index(),
@@ -202,13 +220,99 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         //     .wait(None /* timeout */)
         //     .unwrap();
 
-        (image, cb)
+        (image, view, cb)
     };
+
+    let (_, inter_view) = {
+        let image = Image::new(
+            context.memory_allocator.clone(),
+            ImageCreateInfo {
+                format: Format::R16G16B16A16_SFLOAT,
+                extent: [width as u32, height as u32, 1],
+                usage: ImageUsage::STORAGE,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .unwrap();
+
+        let view = ImageView::new_default(image.clone()).unwrap();
+
+        (image, view)
+    };
+
+    // TODO: Abstract away because we'll have multiple finishing shaders for the
+    // multiple processing pipeline stages
+    mod cs {
+        vulkano_shaders::shader! {
+            bytes: "spirv/finishing_1.spv"
+        }
+    }
+
+    let compute_shader = cs::load(context.device.clone())
+        .unwrap()
+        .entry_point("main")
+        .unwrap();
+    let stage = PipelineShaderStageCreateInfo::new(compute_shader);
+    let layout = PipelineLayout::new(
+        context.device.clone(),
+        PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+            .into_pipeline_layout_create_info(context.device.clone())
+            .unwrap(),
+    )
+    .unwrap();
+
+    let compute_pipeline = ComputePipeline::new(
+        context.device.clone(),
+        None,
+        ComputePipelineCreateInfo::stage_layout(stage, layout),
+    )
+    .expect("Failed to create compute pipeline");
+
+    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+    let set = DescriptorSet::new(
+        context.descriptor_set_allocator.clone(),
+        layout.clone(),
+        [
+            WriteDescriptorSet::image_view(0, bayer_view),
+            WriteDescriptorSet::image_view(1, inter_view),
+        ],
+        [],
+    )
+    .unwrap();
+
+    let mut cbb = AutoCommandBufferBuilder::primary(
+        context.command_buffer_allocator.clone(),
+        context.queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit,
+    )
+    .unwrap();
+
+    cbb.bind_pipeline_compute(compute_pipeline.clone())
+        .unwrap()
+        .bind_descriptor_sets(
+            PipelineBindPoint::Compute,
+            compute_pipeline.layout().clone(),
+            0,
+            set,
+        )
+        .unwrap();
+
+    unsafe {
+        let w = width as u32;
+        let h = height as u32;
+        cbb.dispatch([(w + 7) / 8, (h + 7) / 8, 1] /* rounding up */)
+            .unwrap();
+    }
+
+    let cb_dispatch_compute_pipeline = cbb.build().unwrap();
 
     // We're executing the copy command here because in the future we will chain
     // multiple `GPUFuture`s
     sync::now(context.device.clone())
-        .then_execute(context.queue.clone(), cb_copy_to_raw_image)
+        .then_execute(context.queue.clone(), cb_copy_to_bayer_image)
+        .unwrap()
+        .then_execute(context.queue.clone(), cb_dispatch_compute_pipeline)
         .unwrap()
         .then_signal_fence_and_flush()
         .unwrap()
