@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{panic, sync::Arc};
 
 use android_logger::Config;
 use jni::{
@@ -6,7 +6,7 @@ use jni::{
     objects::{JByteBuffer, JClass},
     sys::{jint, jlong},
 };
-use log::{LevelFilter, info};
+use log::{LevelFilter, error, info};
 use vulkano::{
     VulkanLibrary,
     device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags},
@@ -23,6 +23,26 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
             .with_max_level(LevelFilter::Trace)
             .with_tag("RustNative"),
     );
+
+    panic::set_hook(Box::new(move |panic_info| {
+        if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            error!("panic occurred: {s:?}");
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            error!("panic occurred: {s:?}");
+        } else {
+            error!("panic occurred");
+        }
+
+        if let Some(location) = panic_info.location() {
+            error!(
+                "panic occurred in file '{}' at line {}",
+                location.file(),
+                location.line(),
+            );
+        } else {
+            error!("panic occurred but can't get location information...");
+        }
+    }));
 
     info!("Hello, from Rust!");
 
