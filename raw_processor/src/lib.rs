@@ -11,24 +11,19 @@ use vulkano::{
     DeviceSize, VulkanLibrary,
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
+        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, CopyImageToBufferInfo,
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
     },
-    descriptor_set::{
-        DescriptorSet, WriteDescriptorSet, allocator::StandardDescriptorSetAllocator,
-    },
+    descriptor_set::allocator::StandardDescriptorSetAllocator,
     device::{Device, DeviceCreateInfo, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags},
     format::Format,
     image::{Image, ImageCreateInfo, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
-    pipeline::{
-        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
-        PipelineShaderStageCreateInfo, compute::ComputePipelineCreateInfo,
-        layout::PipelineDescriptorSetLayoutCreateInfo,
-    },
     sync::{self, GpuFuture},
 };
+
+mod pipeline;
 
 struct Context {
     device: Arc<Device>,
@@ -223,7 +218,25 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         (image, view, cb)
     };
 
-    let (_, inter_view) = {
+    let (_, bayer_normalized_view) = {
+        let image = Image::new(
+            context.memory_allocator.clone(),
+            ImageCreateInfo {
+                format: Format::R16_SFLOAT,
+                extent: [width as u32, height as u32, 1],
+                usage: ImageUsage::STORAGE,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .unwrap();
+
+        let view = ImageView::new_default(image.clone()).unwrap();
+
+        (image, view)
+    };
+
+    let (_, rgba_view) = {
         let image = Image::new(
             context.memory_allocator.clone(),
             ImageCreateInfo {
@@ -241,45 +254,93 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         (image, view)
     };
 
+    let (_, quantized_view, quantized_buffer, cb_copy_to_quantized_buffer) = {
+        let image = Image::new(
+            context.memory_allocator.clone(),
+            ImageCreateInfo {
+                format: Format::R8G8B8A8_UNORM,
+                extent: [width as u32, height as u32, 1],
+                usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .unwrap();
+
+        let view = ImageView::new_default(image.clone()).unwrap();
+
+        let buffer = Buffer::from_iter(
+            context.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            (0..width * height * 4).map(|_| 0u8),
+        )
+        .unwrap();
+
+        let mut cbb = AutoCommandBufferBuilder::primary(
+            context.command_buffer_allocator.clone(),
+            context.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        cbb.copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
+            image.clone(),
+            buffer.clone(),
+        ))
+        .unwrap();
+
+        let cb = cbb.build().unwrap();
+
+        (image, view, buffer, cb)
+    };
+
     // TODO: Abstract away because we'll have multiple finishing shaders for the
     // multiple processing pipeline stages
-    mod cs {
-        vulkano_shaders::shader! {
-            bytes: "spirv/finishing_1.spv"
-        }
-    }
+    // mod cs {
+    //     vulkano_shaders::shader! {
+    //         bytes: "spirv/finishing_1.spv"
+    //     }
+    // }
 
-    let compute_shader = cs::load(context.device.clone())
-        .unwrap()
-        .entry_point("main")
-        .unwrap();
-    let stage = PipelineShaderStageCreateInfo::new(compute_shader);
-    let layout = PipelineLayout::new(
-        context.device.clone(),
-        PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
-            .into_pipeline_layout_create_info(context.device.clone())
-            .unwrap(),
-    )
-    .unwrap();
+    // let compute_shader = cs::load(context.device.clone())
+    //     .unwrap()
+    //     .entry_point("main")
+    //     .unwrap();
+    // let stage = PipelineShaderStageCreateInfo::new(compute_shader);
+    // let layout = PipelineLayout::new(
+    //     context.device.clone(),
+    //     PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+    //         .into_pipeline_layout_create_info(context.device.clone())
+    //         .unwrap(),
+    // )
+    // .unwrap();
 
-    let compute_pipeline = ComputePipeline::new(
-        context.device.clone(),
-        None,
-        ComputePipelineCreateInfo::stage_layout(stage, layout),
-    )
-    .expect("Failed to create compute pipeline");
+    // let compute_pipeline = ComputePipeline::new(
+    //     context.device.clone(),
+    //     None,
+    //     ComputePipelineCreateInfo::stage_layout(stage, layout),
+    // )
+    // .expect("Failed to create compute pipeline");
 
-    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
-    let set = DescriptorSet::new(
-        context.descriptor_set_allocator.clone(),
-        layout.clone(),
-        [
-            WriteDescriptorSet::image_view(0, bayer_view),
-            WriteDescriptorSet::image_view(1, inter_view),
-        ],
-        [],
-    )
-    .unwrap();
+    // let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+    // let set = DescriptorSet::new(
+    //     context.descriptor_set_allocator.clone(),
+    //     layout.clone(),
+    //     [
+    //         WriteDescriptorSet::image_view(0, bayer_view),
+    //         WriteDescriptorSet::image_view(1, rgba_view),
+    //     ],
+    //     [],
+    // )
+    // .unwrap();
 
     let mut cbb = AutoCommandBufferBuilder::primary(
         context.command_buffer_allocator.clone(),
@@ -288,22 +349,65 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     )
     .unwrap();
 
-    cbb.bind_pipeline_compute(compute_pipeline.clone())
-        .unwrap()
-        .bind_descriptor_sets(
-            PipelineBindPoint::Compute,
-            compute_pipeline.layout().clone(),
-            0,
-            set,
-        )
-        .unwrap();
-
-    unsafe {
+    let group_counts = {
         let w = width as u32;
         let h = height as u32;
-        cbb.dispatch([(w + 7) / 8, (h + 7) / 8, 1] /* rounding up */)
-            .unwrap();
-    }
+
+        // Rounding up
+        [(w + 7) / 8, (h + 7) / 8, 1]
+    };
+
+    pipeline::stage_1::setup_and_dispatch(
+        context.descriptor_set_allocator.clone(),
+        context.device.clone(),
+        &mut cbb,
+        group_counts,
+        bayer_view,
+        bayer_normalized_view.clone(),
+    );
+
+    pipeline::stage_2::setup_and_dispatch(
+        context.descriptor_set_allocator.clone(),
+        context.device.clone(),
+        &mut cbb,
+        group_counts,
+        bayer_normalized_view,
+        rgba_view.clone(),
+    );
+
+    pipeline::stage_3::setup_and_dispatch(
+        context.descriptor_set_allocator.clone(),
+        context.device.clone(),
+        &mut cbb,
+        group_counts,
+        rgba_view.clone(),
+    );
+
+    pipeline::stage_4::setup_and_dispatch(
+        context.descriptor_set_allocator.clone(),
+        context.device.clone(),
+        &mut cbb,
+        group_counts,
+        rgba_view,
+        quantized_view,
+    );
+
+    // cbb.bind_pipeline_compute(compute_pipeline.clone())
+    //     .unwrap()
+    //     .bind_descriptor_sets(
+    //         PipelineBindPoint::Compute,
+    //         compute_pipeline.layout().clone(),
+    //         0,
+    //         set,
+    //     )
+    //     .unwrap();
+
+    // unsafe {
+    //     let w = width as u32;
+    //     let h = height as u32;
+    //     cbb.dispatch([(w + 7) / 8, (h + 7) / 8, 1] /* rounding up */)
+    //         .unwrap();
+    // }
 
     let cb_dispatch_compute_pipeline = cbb.build().unwrap();
 
@@ -314,12 +418,24 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         .unwrap()
         .then_execute(context.queue.clone(), cb_dispatch_compute_pipeline)
         .unwrap()
+        // .then_execute(context.queue.clone(), cb_copy_to_quantized_buffer)
+        // .unwrap()
+        .then_signal_fence_and_flush()
+        .unwrap()
+        .wait(None)
+        .unwrap();
+
+    // I guess we have to wait until the compute shader is actually done computing
+    sync::now(context.device.clone())
+        .then_execute(context.queue.clone(), cb_copy_to_quantized_buffer)
+        .unwrap()
         .then_signal_fence_and_flush()
         .unwrap()
         .wait(None)
         .unwrap();
 
     info!("Command buffer execution succeeded");
+    info!("{:?}", quantized_buffer.read().unwrap());
 
     // info!("handle: {}", x);
     // info!("width: {}, height: {}", width, height);
