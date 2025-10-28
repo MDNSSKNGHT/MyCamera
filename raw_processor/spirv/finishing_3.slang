@@ -3,6 +3,7 @@
 //
 RWTexture2D<half4> rgbaImage;
 
+[push_constant]
 cbuffer Uniforms {
   float3x3 forwardMatrix1;
   float3x3 forwardMatrix2;
