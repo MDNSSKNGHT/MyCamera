@@ -13,6 +13,12 @@ class NativeRawProcessor {
 
         external fun nativeFini(handle: Long)
 
-        external fun nativeProcess(handle: Long, width: Int, height: Int, data: ByteBuffer)
+        external fun nativeProcess(
+            handle: Long,
+            width: Int,
+            height: Int,
+            data: ByteBuffer,
+            out: ByteArray
+        )
     }
 }

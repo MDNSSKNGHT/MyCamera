@@ -3,8 +3,8 @@ use std::{panic, slice, sync::Arc};
 use android_logger::Config;
 use jni::{
     JNIEnv,
-    objects::{JByteBuffer, JClass},
-    sys::{jint, jlong},
+    objects::{JByteArray, JByteBuffer, JClass},
+    sys::{jbyte, jint, jlong},
 };
 use log::{LevelFilter, error, info};
 use vulkano::{
@@ -153,6 +153,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     width: jint,
     height: jint,
     data: JByteBuffer,
+    out: JByteArray,
 ) {
     let context = unsafe { Arc::from_raw(handle as *const Context) };
 
@@ -435,10 +436,18 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         .unwrap();
 
     info!("Command buffer execution succeeded");
-    info!("{:?}", quantized_buffer.read().unwrap());
+    // info!("{:?}", quantized_buffer.read().unwrap());
 
     // info!("handle: {}", x);
     // info!("width: {}, height: {}", width, height);
+
+    let data_ready_for_export = unsafe {
+        let buffer = quantized_buffer.read().unwrap();
+        slice::from_raw_parts(buffer.as_ptr() as *const jbyte, buffer.len())
+    };
+
+    env.set_byte_array_region(out, 0, data_ready_for_export)
+        .unwrap();
 
     // Avoid the inner value from dropping
     let _ = Arc::into_raw(context);

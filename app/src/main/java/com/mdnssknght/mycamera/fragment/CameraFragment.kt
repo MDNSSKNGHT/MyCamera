@@ -2,6 +2,7 @@ package com.mdnssknght.mycamera.fragment
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageFormat
 import android.hardware.camera2.CameraCaptureSession
@@ -25,6 +26,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
 import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
@@ -46,6 +48,7 @@ import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -242,12 +245,48 @@ class CameraFragment : Fragment() {
 
                         // If the result is a RAW file, then pass its data for further processing.
                         "dng" -> {
+                            val outputBuffer: ByteBuffer
+                            val width: Int
+                            val height: Int
+
                             result.image.let { it ->
+                                width = it.planes[0].rowStride / it.planes[0].pixelStride
+                                height = it.height
+
+                                val outputBytes = ByteArray(width * height * 4)
+
                                 RawProcessor.process(
-                                    it.planes[0].rowStride / it.planes[0].pixelStride,
-                                    it.height,
-                                    it.planes[0].buffer
+                                    width, height,
+                                    it.planes[0].buffer,
+                                    outputBytes
                                 )
+
+                                outputBuffer = ByteBuffer.wrap(outputBytes)
+                            }
+
+                            // Hacky, I know
+                            try {
+                                val bitmap = createBitmap(width, height)
+                                    .apply { copyPixelsFromBuffer(outputBuffer) }
+
+                                val file = createFile(".jpg")
+                                FileOutputStream(file).use { it ->
+                                    bitmap.compress(
+                                        Bitmap.CompressFormat.JPEG,
+                                        100, it
+                                    )
+                                }
+
+                                // Even more hacky. Yes, I know
+                                MediaScannerConnection.scanFile(
+                                    context,
+                                    arrayOf(file.absolutePath),
+                                    null,
+                                    null
+                                )
+
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error saving processed JPEG", e)
                             }
                         }
 
