@@ -8,8 +8,8 @@ cbuffer Uniforms {
   float3x3 forwardMatrix2;
 }
 
-float3x3 M_XYZ_to_sRGB = float3x3(3.2406, -1.5372, -0.4986, -0.9689, 1.8758,
-                                  0.0415, 0.0557, -0.2040, 1.0570);
+static float3x3 M_XYZ_to_sRGB = float3x3(
+    3.2406, -1.5372, -0.4986, -0.9689, 1.8758, 0.0415, 0.0557, -0.2040, 1.0570);
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
