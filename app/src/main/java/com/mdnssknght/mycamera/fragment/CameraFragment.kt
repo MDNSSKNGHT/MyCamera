@@ -242,7 +242,7 @@ class CameraFragment : Fragment() {
 
                         // If the result is a RAW file, then pass its data for further processing.
                         "dng" -> {
-                            result.image.let {
+                            result.image.let { it ->
                                 RawProcessor.process(
                                     it.planes[0].rowStride / it.planes[0].pixelStride,
                                     it.height,
