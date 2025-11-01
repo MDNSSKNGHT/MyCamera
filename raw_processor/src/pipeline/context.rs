@@ -11,7 +11,7 @@ use vulkano::{
     memory::allocator::StandardMemoryAllocator,
 };
 
-pub struct PipelineContext {
+pub struct Context {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
     pub memory_allocator: Arc<StandardMemoryAllocator>,
@@ -19,8 +19,8 @@ pub struct PipelineContext {
     pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
 }
 
-impl PipelineContext {
-    pub fn new(library: Arc<VulkanLibrary>) -> Box<PipelineContext> {
+impl Context {
+    pub fn new(library: Arc<VulkanLibrary>) -> Box<Context> {
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
@@ -82,7 +82,7 @@ impl PipelineContext {
         ));
 
         // Sorry, I still don't know how to return Result<>
-        Box::new(PipelineContext {
+        Box::new(Context {
             device,
             queue,
             memory_allocator,

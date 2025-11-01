@@ -22,22 +22,15 @@ use vulkano::{
 };
 
 pub struct RawFinishing {
-    raw_image_view: Arc<ImageView>,
-    raw_normalized_image_view: Arc<ImageView>,
-    copy_buffer_to_raw_image: Arc<PrimaryAutoCommandBuffer>,
-
-    rgba_intermediate_image_view: Arc<ImageView>,
-
-    rgba_quantized_image_view: Arc<ImageView>,
-    rgba_quantized_buffer: Subbuffer<[u8]>,
-    copy_quantized_image_to_buffer: Arc<PrimaryAutoCommandBuffer>,
-
+    image_views: [Arc<ImageView>; 4],
+    buffers: [Subbuffer<[u8]>; 1],
+    copy_commands: [Arc<PrimaryAutoCommandBuffer>; 2],
     work_groups: [u32; 3],
 }
 
 impl RawFinishing {
     pub fn new(
-        context: &crate::pipeline::context::PipelineContext,
+        context: &crate::pipeline::Context,
         data: *const u8,
         len: usize,
         size: [i32; 2],
@@ -189,21 +182,19 @@ impl RawFinishing {
         };
 
         RawFinishing {
-            raw_image_view,
-            raw_normalized_image_view,
-            copy_buffer_to_raw_image,
-
-            rgba_intermediate_image_view,
-
-            rgba_quantized_image_view,
-            rgba_quantized_buffer,
-            copy_quantized_image_to_buffer,
-
+            image_views: [
+                raw_image_view,
+                raw_normalized_image_view,
+                rgba_intermediate_image_view,
+                rgba_quantized_image_view,
+            ],
+            buffers: [rgba_quantized_buffer],
+            copy_commands: [copy_buffer_to_raw_image, copy_quantized_image_to_buffer],
             work_groups,
         }
     }
 
-    pub fn process(&self, context: &crate::pipeline::context::PipelineContext) {
+    pub fn process(&self, context: &crate::pipeline::Context) {
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             context.command_buffer_allocator.clone(),
             context.queue.queue_family_index(),
@@ -221,8 +212,11 @@ impl RawFinishing {
                 context.descriptor_set_allocator.clone(),
                 layout.clone(),
                 [
-                    WriteDescriptorSet::image_view(0, self.raw_image_view.clone()),
-                    WriteDescriptorSet::image_view(1, self.raw_normalized_image_view.clone()),
+                    WriteDescriptorSet::image_view(0, self.image_views[0].clone() /* raw */),
+                    WriteDescriptorSet::image_view(
+                        1,
+                        self.image_views[1].clone(), /* raw_normalized */
+                    ),
                 ],
                 [],
             )
@@ -268,8 +262,11 @@ impl RawFinishing {
                 context.descriptor_set_allocator.clone(),
                 layout.clone(),
                 [
-                    WriteDescriptorSet::image_view(0, self.raw_normalized_image_view.clone()),
-                    WriteDescriptorSet::image_view(1, self.rgba_intermediate_image_view.clone()),
+                    WriteDescriptorSet::image_view(
+                        0,
+                        self.image_views[1].clone(), /* raw_normalized */
+                    ),
+                    WriteDescriptorSet::image_view(1, self.image_views[2].clone() /* rgba */),
                 ],
                 [],
             )
@@ -312,7 +309,7 @@ impl RawFinishing {
                 layout.clone(),
                 [WriteDescriptorSet::image_view(
                     0,
-                    self.rgba_intermediate_image_view.clone(),
+                    self.image_views[2].clone(), /* rgba */
                 )],
                 [],
             )
@@ -366,8 +363,11 @@ impl RawFinishing {
                 context.descriptor_set_allocator.clone(),
                 layout.clone(),
                 [
-                    WriteDescriptorSet::image_view(0, self.rgba_intermediate_image_view.clone()),
-                    WriteDescriptorSet::image_view(1, self.rgba_quantized_image_view.clone()),
+                    WriteDescriptorSet::image_view(0, self.image_views[2].clone() /* rgba */),
+                    WriteDescriptorSet::image_view(
+                        1,
+                        self.image_views[3].clone(), /* rgba_quantized */
+                    ),
                 ],
                 [],
             )
@@ -392,7 +392,10 @@ impl RawFinishing {
         let command_buffer = command_buffer_builder.build().unwrap();
 
         sync::now(context.device.clone())
-            .then_execute(context.queue.clone(), self.copy_buffer_to_raw_image.clone())
+            .then_execute(
+                context.queue.clone(),
+                self.copy_commands[0].clone(), /* buffer to raw_image */
+            )
             .unwrap()
             .then_execute(context.queue.clone(), command_buffer)
             .unwrap()
@@ -404,7 +407,7 @@ impl RawFinishing {
         sync::now(context.device.clone())
             .then_execute(
                 context.queue.clone(),
-                self.copy_quantized_image_to_buffer.clone(),
+                self.copy_commands[1].clone(), /* rgba_quantized to buffer */
             )
             .unwrap()
             .then_signal_fence_and_flush()
@@ -416,7 +419,7 @@ impl RawFinishing {
     }
 
     pub fn read_output_buffer(&self) -> BufferReadGuard<'_, [u8]> {
-        self.rgba_quantized_buffer.read().unwrap()
+        self.buffers[0].read().unwrap() /* rgba quantized buffer */
     }
 }
 

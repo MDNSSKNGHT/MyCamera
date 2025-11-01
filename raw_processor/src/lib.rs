@@ -49,7 +49,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     //
     // Initialized only once for the entire application lifetime
     //
-    let pipeline_context = pipeline::context::PipelineContext::new(library);
+    let pipeline_context = pipeline::Context::new(library);
 
     Box::into_raw(pipeline_context) as jlong
 }
@@ -60,7 +60,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     _class: JClass,
     handle: jlong,
 ) {
-    drop(unsafe { Box::from_raw(handle as *mut pipeline::context::PipelineContext) });
+    drop(unsafe { Box::from_raw(handle as *mut pipeline::Context) });
 }
 
 #[unsafe(no_mangle)]
@@ -73,18 +73,18 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     data: JByteBuffer,
     out: JByteArray,
 ) {
-    let context = unsafe { &*(handle as *const pipeline::context::PipelineContext) };
+    let context = unsafe { &*(handle as *const pipeline::Context) };
 
-    let finisher = pipeline::raw_finishing::RawFinishing::new(
+    let raw_finishing = pipeline::RawFinishing::new(
         &context,
         env.get_direct_buffer_address(&data).unwrap(),
         env.get_direct_buffer_capacity(&data).unwrap(),
         [width, height],
     );
-    finisher.process(context);
+    raw_finishing.process(context);
 
     let output_buffer = unsafe {
-        let buffer = finisher.read_output_buffer();
+        let buffer = raw_finishing.read_output_buffer();
         slice::from_raw_parts(buffer.as_ptr() as *const jbyte, buffer.len())
     };
 
