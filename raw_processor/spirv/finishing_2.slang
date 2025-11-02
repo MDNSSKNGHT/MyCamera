@@ -1,119 +1,58 @@
-//
-// Malvar-He-Cutler demosaic
-//
-RWTexture2D<half> rawNormalizedImage;
-
-RWTexture2D<half4> rgbaImage;
+// https://casual-effects.com/research/McGuire2009Bayer/bayer-jgt09.pdf
+RWTexture2D<half> RawNormalized;
+RWTexture2D<half4> Rgba;
 
 [push_constant]
-cbuffer Uniforms { uint4 cfa; }
+cbuffer Uniforms { int2 size; }
 
-uint2 clampToEdge(int2 coords) {
-  uint2 size;
-  rawNormalizedImage.GetDimensions(size.x, size.y);
+static const float4 kA = float4(-1.0, -1.5, 0.5, -1.0) / 8.0;
+static const float4 kB = float4(2.0, 0.0, 0.0, 4.0) / 8.0;
+static const float4 kC = float4(4.0, 6.0, 5.0, 5.0) / 8.0;
+static const float4 kD = float4(0.0, 2.0, -1.0, -1.0) / 8.0;
+static const float4 kE = kA.xywz;
+static const float4 kF = kB.xywz;
 
+uint2 safeCoord(int x, int y) {
+  int2 coords = int2(x, y);
   uint2 safe = clamp(coords, uint2(0, 0), size - uint2(1, 1));
   return safe;
 }
 
-[shader("compute")]
-[numthreads(8, 8, 1)]
+[Shader("compute")]
+[NumThreads(8, 8, 1)]
 void computeMain(uint3 threadId: SV_DispatchThreadID) {
-  var coords = threadId.xy;
+  uint x = threadId.x;
+  uint y = threadId.y;
 
-  var xPhase = coords.x & 1;
-  var yPhase = coords.y & 1;
+  uint xPhase = x & 1;
+  uint yPhase = y & 1;
 
-  var index = yPhase * 2 + xPhase;
+  float A =
+      RawNormalized[safeCoord(x, y + -2)] + RawNormalized[safeCoord(x, y + 2)];
+  float B =
+      RawNormalized[safeCoord(x, y + -1)] + RawNormalized[safeCoord(x, y + 1)];
+  float C = RawNormalized[safeCoord(x, y)];
+  float D = RawNormalized[safeCoord(x - 1, y - 1)] +
+            RawNormalized[safeCoord(x + 1, y - 1)] +
+            RawNormalized[safeCoord(x - 1, y + 1)] +
+            RawNormalized[safeCoord(x + 1, y + 1)];
+  float E =
+      RawNormalized[safeCoord(x - 2, y)] + RawNormalized[safeCoord(x + 2, y)];
+  float F =
+      RawNormalized[safeCoord(x - 1, y)] + RawNormalized[safeCoord(x + 1, y)];
 
-  float R, G, B;
+  // x cross
+  // y checker
+  // z theta
+  // w phi
+  float4 pattern = kA * A + kB * B + kC * C + kD * D + kE * E + kF * F;
 
-  switch (cfa[index]) {
-  case 0:
-    R = rawNormalizedImage[coords];
-    G = (-2.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(0, 2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         4.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(0, 1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(-1, 0))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, 0))]) +
-         8.0 * rawNormalizedImage[coords]) /
-        16.0;
-    B = (-3.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(0, 2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         4.0 * (rawNormalizedImage[clampToEdge(coords + int2(-1, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(-1, 1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, 1))]) +
-         12.0 * rawNormalizedImage[coords]) /
-        16.0;
-    break;
-  case 1:
-    R = (-2.0 * (rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         8.0 * (rawNormalizedImage[clampToEdge(coords + int2(-1, 0))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, 0))]) -
-         2.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                rawNormalizedImage[clampToEdge(coords + int2(0, 2))]) +
-         10.0 * rawNormalizedImage[coords]) /
-        16.0;
-    G = rawNormalizedImage[coords];
-    B = (-2.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(0, 2))]) +
-         8.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(0, 1))]) -
-         2.0 * (rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         10.0 * rawNormalizedImage[coords]) /
-        16.0;
-    break;
-  case 2:
-    R = (-2.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(0, 2))]) +
-         8.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(0, 1))]) -
-         2.0 * (rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         10.0 * rawNormalizedImage[coords]) /
-        16.0;
-    G = rawNormalizedImage[coords];
-    B = (-2.0 * (rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         8.0 * (rawNormalizedImage[clampToEdge(coords + int2(-1, 0))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, 0))]) -
-         2.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                rawNormalizedImage[clampToEdge(coords + int2(0, 2))]) +
-         10.0 * rawNormalizedImage[coords]) /
-        16.0;
-    break;
-  case 3:
-    R = (-3.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(0, 2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         4.0 * (rawNormalizedImage[clampToEdge(coords + int2(-1, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(-1, 1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, 1))]) +
-         12.0 * rawNormalizedImage[coords]) /
-        16.0;
-    G = (-2.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(0, 2))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(-2, 0))] +
-                 rawNormalizedImage[clampToEdge(coords + int2(2, 0))]) +
-         4.0 * (rawNormalizedImage[clampToEdge(coords + int2(0, -1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(0, 1))] +
-                rawNormalizedImage[clampToEdge(coords + int2(-1, 0))] +
-                rawNormalizedImage[clampToEdge(coords + int2(1, 0))]) +
-         8.0 * rawNormalizedImage[coords]) /
-        16.0;
-    B = rawNormalizedImage[coords];
-    break;
-  }
-
-  rgbaImage[coords] = half4(half(R), half(G), half(B), 1.0h);
+  Rgba[int2(x, y)] =
+      (yPhase == 0)
+          ? ((xPhase == 0)
+                 ? half4(half(C), half(pattern.x), half(pattern.y), 1.0h)
+                 : half4(half(pattern.z), half(C), half(pattern.w), 1.0h))
+          : ((xPhase == 0)
+                 ? half4(half(pattern.w), half(C), half(pattern.z), 1.0h)
+                 : half4(half(pattern.y), half(pattern.x), half(C), 1.0h));
 }
