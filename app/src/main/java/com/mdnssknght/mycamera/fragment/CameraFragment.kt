@@ -264,6 +264,13 @@ class CameraFragment : Fragment() {
                                 result.metadata.get(CaptureResult.COLOR_CORRECTION_GAINS)!!
                                     .copyTo(colorGains, 0)
 
+                                val whiteLevel =
+                                    characteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL)!!
+
+                                val blackLevel = IntArray(4)
+                                characteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN)!!
+                                    .copyTo(blackLevel, 0)
+
                                 val forwardMatrix1 = FloatArray(9)
                                 val forwardMatrix2 = FloatArray(9)
 
@@ -287,6 +294,8 @@ class CameraFragment : Fragment() {
                                     it.planes[0].buffer,
                                     outputBytes,
                                     colorFilterArrangement,
+                                    whiteLevel,
+                                    blackLevel,
                                     colorGains,
                                     forwardMatrix1,
                                     forwardMatrix2
@@ -306,6 +315,15 @@ class CameraFragment : Fragment() {
                                         Bitmap.CompressFormat.JPEG,
                                         100, it
                                     )
+                                }
+
+                                ExifInterface(file.absolutePath).let { exif ->
+                                    exif.setAttribute(
+                                        ExifInterface.TAG_ORIENTATION,
+                                        result.orientation.toString()
+                                    )
+                                    exif.saveAttributes()
+                                    Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
                                 }
 
                                 // Even more hacky. Yes, I know

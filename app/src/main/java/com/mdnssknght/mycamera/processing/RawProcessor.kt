@@ -24,6 +24,8 @@ object RawProcessor {
         data: ByteBuffer,
         out: ByteArray,
         colorFilterArrangement: Int,
+        whiteLevel: Int,
+        blackLevel: IntArray,
         colorGains: FloatArray,
         forwardMatrix1: FloatArray,
         forwardMatrix2: FloatArray,
@@ -35,6 +37,8 @@ object RawProcessor {
             data,
             out,
             colorFilterArrangement,
+            whiteLevel,
+            blackLevel,
             colorGains,
             forwardMatrix1,
             forwardMatrix2

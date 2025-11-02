@@ -3,7 +3,7 @@ use std::{panic, slice};
 use android_logger::Config;
 use jni::{
     JNIEnv,
-    objects::{JByteArray, JByteBuffer, JClass, JFloatArray},
+    objects::{JByteArray, JByteBuffer, JClass, JFloatArray, JIntArray},
     sys::{jbyte, jint, jlong},
 };
 use log::{LevelFilter, error, info};
@@ -73,11 +73,17 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     data: JByteBuffer,
     out: JByteArray,
     color_filter_arrangement: jint,
+    white_level: jint,
+    black_level: JIntArray,
     color_gains: JFloatArray,
     forward_matrix_1: JFloatArray,
     forward_matrix_2: JFloatArray,
 ) {
     let context = unsafe { &*(handle as *const pipeline::Context) };
+
+    let mut black_level_data = [0i32; 4];
+    env.get_int_array_region(black_level, 0, &mut black_level_data)
+        .unwrap();
 
     let mut color_gains_data = [0f32; 4];
     env.get_float_array_region(color_gains, 0, &mut color_gains_data)
@@ -102,6 +108,8 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         context,
         [width, height],
         color_filter_arrangement,
+        white_level,
+        black_level_data,
         color_gains_data,
         forward_matrix_1_data,
         forward_matrix_2_data,

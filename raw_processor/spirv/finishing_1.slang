@@ -7,8 +7,8 @@ RWTexture2D<half> RawNormalized;
 [push_constant]
 cbuffer Uniforms {
   float4 colorGains;
+  int4 blackLevel;
   uint whiteLevel;
-  uint blackLevel;
 }
 
 [shader("compute")]
@@ -22,8 +22,8 @@ void computeMain(uint3 threadId: SV_DispatchThreadID) {
   uint yPhase = y & 1;
 
   // remove sensor bias by subtracting the black level
-  float norm =
-      float(Raw[int2(x, y)] - blackLevel) / float(whiteLevel - blackLevel);
+  float norm = float(Raw[int2(x, y)] - blackLevel[0]) /
+               float(whiteLevel - blackLevel[0]);
 
   RawNormalized[int2(x, y)] =
       (yPhase == 0) ? ((xPhase == 0) ? half(norm * colorGains[0])

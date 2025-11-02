@@ -227,6 +227,8 @@ impl RawFinishing {
         context: &crate::pipeline::Context,
         size: [i32; 2],
         color_filter_arrangement: i32,
+        white_level: i32,
+        black_level: [i32; 4],
         color_gains: [f32; 4],
         forward_matrix_1: [f32; 9],
         forward_matrix_2: [f32; 9],
@@ -322,14 +324,14 @@ impl RawFinishing {
             #[repr(C)]
             struct Parameters {
                 color_gains: [f32; 4],
-                white_level: u32,
-                black_level: u32,
+                black_level: [i32; 4],
+                white_level: i32,
             }
 
             let parameters = Parameters {
                 color_gains,
-                white_level: 1023,
-                black_level: 0,
+                white_level,
+                black_level,
             };
 
             command_buffer_builder
