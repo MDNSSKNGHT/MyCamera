@@ -21,6 +21,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import android.util.Rational
 import android.view.LayoutInflater
 import android.view.Surface
 import android.view.SurfaceHolder
@@ -255,10 +256,40 @@ class CameraFragment : Fragment() {
 
                                 val outputBytes = ByteArray(width * height * 4)
 
+                                val colorFilterArrangement = characteristics.get(
+                                    CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT
+                                )!!
+
+                                val colorGains = FloatArray(4)
+                                result.metadata.get(CaptureResult.COLOR_CORRECTION_GAINS)!!
+                                    .copyTo(colorGains, 0)
+
+                                val forwardMatrix1 = FloatArray(9)
+                                val forwardMatrix2 = FloatArray(9)
+
+                                val rationalDestination = arrayOfNulls<Rational>(9)
+
+                                characteristics.get(CameraCharacteristics.SENSOR_FORWARD_MATRIX1)!!
+                                    .copyElements(rationalDestination, 0)
+                                rationalDestination.forEachIndexed { index, rational ->
+                                    forwardMatrix1[index] = rational!!.toFloat()
+                                }
+
+                                characteristics.get(CameraCharacteristics.SENSOR_FORWARD_MATRIX2)!!
+                                    .copyElements(rationalDestination, 0)
+                                rationalDestination.forEachIndexed { index, rational ->
+                                    forwardMatrix2[index] = rational!!.toFloat()
+                                }
+
                                 RawProcessor.process(
-                                    width, height,
+                                    width,
+                                    height,
                                     it.planes[0].buffer,
-                                    outputBytes
+                                    outputBytes,
+                                    colorFilterArrangement,
+                                    colorGains,
+                                    forwardMatrix1,
+                                    forwardMatrix2
                                 )
 
                                 outputBuffer = ByteBuffer.wrap(outputBytes)

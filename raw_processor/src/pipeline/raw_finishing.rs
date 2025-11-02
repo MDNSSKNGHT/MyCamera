@@ -194,7 +194,15 @@ impl RawFinishing {
         }
     }
 
-    pub fn process(&self, context: &crate::pipeline::Context) {
+    pub fn process(
+        &self,
+        context: &crate::pipeline::Context,
+        size: [i32; 2],
+        _color_filter_arrangement: i32,
+        color_gains: [f32; 4],
+        forward_matrix_1: [f32; 9],
+        forward_matrix_2: [f32; 9],
+    ) {
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             context.command_buffer_allocator.clone(),
             context.queue.queue_family_index(),
@@ -225,11 +233,13 @@ impl RawFinishing {
             #[derive(BufferContents)]
             #[repr(C)]
             struct Parameters {
+                color_gains: [f32; 4],
                 white_level: u32,
                 black_level: u32,
             }
 
             let parameters = Parameters {
+                color_gains,
                 white_level: 1023,
                 black_level: 0,
             };
@@ -275,10 +285,10 @@ impl RawFinishing {
             #[derive(BufferContents)]
             #[repr(C)]
             struct Parameters {
-                cfa: [u32; 4],
+                size: [i32; 2],
             }
 
-            let parameters = Parameters { cfa: [0, 1, 2, 3] };
+            let parameters = Parameters { size };
 
             command_buffer_builder
                 .bind_pipeline_compute(compute_pipeline.clone())
@@ -324,14 +334,44 @@ impl RawFinishing {
 
             let parameters = Parameters {
                 forward_matrix_1: [
-                    [1.0, 0.0, 0.0, 0.0 /* padding */],
-                    [0.0, 1.0, 0.0, 0.0 /* padding */],
-                    [0.0, 0.0, 1.0, 0.0 /* padding */],
-                ], /* TODO: pass actual value */
+                    [
+                        forward_matrix_1[0],
+                        forward_matrix_1[1],
+                        forward_matrix_1[2],
+                        0.0, /* padding */
+                    ],
+                    [
+                        forward_matrix_1[3],
+                        forward_matrix_1[4],
+                        forward_matrix_1[5],
+                        0.0, /* padding */
+                    ],
+                    [
+                        forward_matrix_1[6],
+                        forward_matrix_1[7],
+                        forward_matrix_1[8],
+                        0.0, /* padding */
+                    ],
+                ],
                 forward_matrix_2: [
-                    [1.0, 0.0, 0.0, 0.0 /* padding */],
-                    [0.0, 1.0, 0.0, 0.0 /* padding */],
-                    [0.0, 0.0, 1.0, 0.0 /* padding */],
+                    [
+                        forward_matrix_2[0],
+                        forward_matrix_2[1],
+                        forward_matrix_2[2],
+                        0.0, /* padding2*/
+                    ],
+                    [
+                        forward_matrix_2[3],
+                        forward_matrix_2[4],
+                        forward_matrix_2[5],
+                        0.0, /* padding2*/
+                    ],
+                    [
+                        forward_matrix_2[6],
+                        forward_matrix_2[7],
+                        forward_matrix_2[8],
+                        0.0, /* padding */
+                    ],
                 ], /* TODO: pass actual value */
             };
 

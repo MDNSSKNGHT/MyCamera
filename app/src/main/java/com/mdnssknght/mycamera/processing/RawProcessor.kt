@@ -18,7 +18,26 @@ object RawProcessor {
         NativeRawProcessor.nativeFini(pointerHandle)
     }
 
-    fun process(width: Int, height: Int, data: ByteBuffer, out: ByteArray) {
-        NativeRawProcessor.nativeProcess(pointerHandle, width, height, data, out)
+    fun process(
+        width: Int,
+        height: Int,
+        data: ByteBuffer,
+        out: ByteArray,
+        colorFilterArrangement: Int,
+        colorGains: FloatArray,
+        forwardMatrix1: FloatArray,
+        forwardMatrix2: FloatArray,
+    ) {
+        NativeRawProcessor.nativeProcess(
+            pointerHandle,
+            width,
+            height,
+            data,
+            out,
+            colorFilterArrangement,
+            colorGains,
+            forwardMatrix1,
+            forwardMatrix2
+        )
     }
 }

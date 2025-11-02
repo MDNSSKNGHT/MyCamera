@@ -18,7 +18,11 @@ class NativeRawProcessor {
             width: Int,
             height: Int,
             data: ByteBuffer,
-            out: ByteArray
+            out: ByteArray,
+            colorFilterArrangement: Int,
+            colorGains: FloatArray,
+            forwardMatrix1: FloatArray,
+            forwardMatrix2: FloatArray,
         )
     }
 }

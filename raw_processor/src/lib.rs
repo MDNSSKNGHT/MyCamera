@@ -3,7 +3,7 @@ use std::{panic, slice};
 use android_logger::Config;
 use jni::{
     JNIEnv,
-    objects::{JByteArray, JByteBuffer, JClass},
+    objects::{JByteArray, JByteBuffer, JClass, JFloatArray},
     sys::{jbyte, jint, jlong},
 };
 use log::{LevelFilter, error, info};
@@ -72,16 +72,40 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     height: jint,
     data: JByteBuffer,
     out: JByteArray,
+    color_filter_arrangement: jint,
+    color_gains: JFloatArray,
+    forward_matrix_1: JFloatArray,
+    forward_matrix_2: JFloatArray,
 ) {
     let context = unsafe { &*(handle as *const pipeline::Context) };
 
+    let mut color_gains_data = [0f32; 4];
+    env.get_float_array_region(color_gains, 0, &mut color_gains_data)
+        .unwrap();
+
+    let mut forward_matrix_1_data = [0f32; 9];
+    env.get_float_array_region(forward_matrix_1, 0, &mut forward_matrix_1_data)
+        .unwrap();
+
+    let mut forward_matrix_2_data = [0f32; 9];
+    env.get_float_array_region(forward_matrix_2, 0, &mut forward_matrix_2_data)
+        .unwrap();
+
     let raw_finishing = pipeline::RawFinishing::new(
-        &context,
+        context,
         env.get_direct_buffer_address(&data).unwrap(),
         env.get_direct_buffer_capacity(&data).unwrap(),
         [width, height],
     );
-    raw_finishing.process(context);
+
+    raw_finishing.process(
+        context,
+        [width, height],
+        color_filter_arrangement,
+        color_gains_data,
+        forward_matrix_1_data,
+        forward_matrix_2_data,
+    );
 
     let output_buffer = unsafe {
         let buffer = raw_finishing.read_output_buffer();
