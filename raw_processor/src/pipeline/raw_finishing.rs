@@ -22,10 +22,19 @@ use vulkano::{
 };
 
 pub struct RawFinishing {
-    image_views: [Arc<ImageView>; 4],
+    image_views: [Arc<ImageView>; Views::TotalOfViews as usize],
     buffers: [Subbuffer<[u8]>; 1],
     copy_commands: [Arc<PrimaryAutoCommandBuffer>; 2],
     work_groups: [u32; 3],
+}
+
+enum Views {
+    Raw,
+    RawShifted,
+    RawNormalized,
+    RgbaIntermediate,
+    RgbaQuantized,
+    TotalOfViews,
 }
 
 impl RawFinishing {
@@ -87,6 +96,24 @@ impl RawFinishing {
             let command_buffer = command_buffer_builder.build().unwrap();
 
             (image, view, command_buffer)
+        };
+
+        let (_, raw_shifted_image_view) = {
+            let image = Image::new(
+                context.memory_allocator.clone(),
+                ImageCreateInfo {
+                    format: Format::R16_UINT,
+                    extent,
+                    usage: ImageUsage::STORAGE,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            )
+            .unwrap();
+
+            let view = ImageView::new_default(image.clone()).unwrap();
+
+            (image, view)
         };
 
         let (_, raw_normalized_image_view) = {
@@ -184,6 +211,7 @@ impl RawFinishing {
         RawFinishing {
             image_views: [
                 raw_image_view,
+                raw_shifted_image_view,
                 raw_normalized_image_view,
                 rgba_intermediate_image_view,
                 rgba_quantized_image_view,
@@ -198,7 +226,7 @@ impl RawFinishing {
         &self,
         context: &crate::pipeline::Context,
         size: [i32; 2],
-        _color_filter_arrangement: i32,
+        color_filter_arrangement: i32,
         color_gains: [f32; 4],
         forward_matrix_1: [f32; 9],
         forward_matrix_2: [f32; 9],
@@ -211,6 +239,63 @@ impl RawFinishing {
         .unwrap();
 
         {
+            let compute_shader = finishing_0::load(context.device.clone()).unwrap();
+            let compute_pipeline =
+                create_compute_pipeline_from_shader(context.device.clone(), compute_shader);
+
+            let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+            let set = DescriptorSet::new(
+                context.descriptor_set_allocator.clone(),
+                layout.clone(),
+                [
+                    WriteDescriptorSet::image_view(
+                        0,
+                        self.image_views[Views::Raw as usize].clone(),
+                    ),
+                    WriteDescriptorSet::image_view(
+                        1,
+                        self.image_views[Views::RawShifted as usize].clone(),
+                    ),
+                ],
+                [],
+            )
+            .unwrap();
+
+            #[derive(BufferContents)]
+            #[repr(C)]
+            struct Parameters {
+                shift_vector: [i32; 2],
+            }
+
+            let shift_vector = match color_filter_arrangement {
+                0 /* RGGB */ => [0, 0],
+                1 /* GRBG */ => [1, 0],
+                2 /* GBRG */ => [0, 1],
+                3 /* BGGR */ => [1, 1],
+                _ => [0, 0],
+            };
+
+            let parameters = Parameters { shift_vector };
+
+            command_buffer_builder
+                .bind_pipeline_compute(compute_pipeline.clone())
+                .unwrap()
+                .push_constants(compute_pipeline.layout().clone(), 0, parameters)
+                .unwrap()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Compute,
+                    compute_pipeline.layout().clone(),
+                    0,
+                    set,
+                )
+                .unwrap();
+
+            unsafe {
+                command_buffer_builder.dispatch(self.work_groups).unwrap();
+            }
+        }
+
+        {
             let compute_shader = finishing_1::load(context.device.clone()).unwrap();
             let compute_pipeline =
                 create_compute_pipeline_from_shader(context.device.clone(), compute_shader);
@@ -220,10 +305,13 @@ impl RawFinishing {
                 context.descriptor_set_allocator.clone(),
                 layout.clone(),
                 [
-                    WriteDescriptorSet::image_view(0, self.image_views[0].clone() /* raw */),
+                    WriteDescriptorSet::image_view(
+                        0,
+                        self.image_views[Views::RawShifted as usize].clone(),
+                    ),
                     WriteDescriptorSet::image_view(
                         1,
-                        self.image_views[1].clone(), /* raw_normalized */
+                        self.image_views[Views::RawNormalized as usize].clone(),
                     ),
                 ],
                 [],
@@ -274,9 +362,12 @@ impl RawFinishing {
                 [
                     WriteDescriptorSet::image_view(
                         0,
-                        self.image_views[1].clone(), /* raw_normalized */
+                        self.image_views[Views::RawNormalized as usize].clone(),
                     ),
-                    WriteDescriptorSet::image_view(1, self.image_views[2].clone() /* rgba */),
+                    WriteDescriptorSet::image_view(
+                        1,
+                        self.image_views[Views::RgbaIntermediate as usize].clone(),
+                    ),
                 ],
                 [],
             )
@@ -319,7 +410,7 @@ impl RawFinishing {
                 layout.clone(),
                 [WriteDescriptorSet::image_view(
                     0,
-                    self.image_views[2].clone(), /* rgba */
+                    self.image_views[Views::RgbaIntermediate as usize].clone(),
                 )],
                 [],
             )
@@ -403,10 +494,13 @@ impl RawFinishing {
                 context.descriptor_set_allocator.clone(),
                 layout.clone(),
                 [
-                    WriteDescriptorSet::image_view(0, self.image_views[2].clone() /* rgba */),
+                    WriteDescriptorSet::image_view(
+                        0,
+                        self.image_views[Views::RgbaIntermediate as usize].clone(),
+                    ),
                     WriteDescriptorSet::image_view(
                         1,
-                        self.image_views[3].clone(), /* rgba_quantized */
+                        self.image_views[Views::RgbaQuantized as usize].clone(),
                     ),
                 ],
                 [],
@@ -484,6 +578,12 @@ fn create_compute_pipeline_from_shader(
     .expect("Failed to create compute pipeline");
 
     compute_pipeline
+}
+
+mod finishing_0 {
+    vulkano_shaders::shader! {
+        bytes: "spirv/finishing_0.spv"
+    }
 }
 
 mod finishing_1 {
