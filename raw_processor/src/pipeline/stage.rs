@@ -8,7 +8,7 @@ use vulkano::{
     pipeline::ComputePipeline,
 };
 
-use crate::context::Context;
+use crate::pipeline::context;
 
 pub struct StageResources {
     pub compute_pipeline: Arc<ComputePipeline>,
@@ -30,7 +30,7 @@ pub trait StageInPipeline {
     // In a pipeline the output of a stage is the input of the next stage
     fn create_stage_resources(
         &self,
-        context: &Context,
+        context: &context::Context,
         input: Option<StageOutput>,
     ) -> StageResources;
 

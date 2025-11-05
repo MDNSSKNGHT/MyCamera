@@ -19,8 +19,8 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
-use crate::{
-    context::Context,
+use crate::pipeline::{
+    context,
     stage::{StageInPipeline, StageOutput, StageResources},
 };
 
@@ -59,7 +59,11 @@ struct Stage5 {
 }
 
 impl StageInPipeline for Stage0 {
-    fn create_stage_resources(&self, context: &Context, _: Option<StageOutput>) -> StageResources {
+    fn create_stage_resources(
+        &self,
+        context: &context::Context,
+        _: Option<StageOutput>,
+    ) -> StageResources {
         let (_, raw_image_view) = {
             let buffer = Buffer::new_slice::<u8>(
                 context.memory_allocator.clone(),
@@ -228,7 +232,7 @@ impl StageInPipeline for Stage0 {
 impl StageInPipeline for Stage1 {
     fn create_stage_resources(
         &self,
-        context: &Context,
+        context: &context::Context,
         input: Option<StageOutput>,
     ) -> StageResources {
         let (_, raw_normalized_image_view) = {
@@ -338,7 +342,7 @@ impl StageInPipeline for Stage1 {
 impl StageInPipeline for Stage2 {
     fn create_stage_resources(
         &self,
-        context: &Context,
+        context: &context::Context,
         input: Option<StageOutput>,
     ) -> StageResources {
         let (_, rgba_image_view) = {
@@ -444,7 +448,7 @@ impl StageInPipeline for Stage2 {
 impl StageInPipeline for Stage3 {
     fn create_stage_resources(
         &self,
-        context: &Context,
+        context: &context::Context,
         input: Option<StageOutput>,
     ) -> StageResources {
         mod cs {
@@ -569,7 +573,7 @@ impl StageInPipeline for Stage3 {
 impl StageInPipeline for Stage4 {
     fn create_stage_resources(
         &self,
-        context: &Context,
+        context: &context::Context,
         input: Option<StageOutput>,
     ) -> StageResources {
         mod cs {
@@ -642,7 +646,7 @@ impl StageInPipeline for Stage4 {
 impl StageInPipeline for Stage5 {
     fn create_stage_resources(
         &self,
-        context: &Context,
+        context: &context::Context,
         input: Option<StageOutput>,
     ) -> StageResources {
         let (_, quantized_image_view, quantized_buffer, copy_quantized_image_to_buffer) = {
@@ -775,7 +779,7 @@ impl Finish {
 
     pub fn finish(
         &mut self,
-        context: &Context,
+        context: &context::Context,
         buffer: *const u8,
         buffer_len: usize,
         size: [i32; 2],

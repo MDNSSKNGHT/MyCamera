@@ -9,9 +9,7 @@ use jni::{
 use log::{LevelFilter, error, info};
 use vulkano::VulkanLibrary;
 
-mod context;
-mod finish;
-mod stage;
+mod pipeline;
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeInit(
@@ -51,7 +49,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     //
     // Initialized only once for the entire application lifetime
     //
-    let pipeline_context = context::Context::new(library);
+    let pipeline_context = pipeline::Context::new(library);
 
     Box::into_raw(pipeline_context) as jlong
 }
@@ -62,7 +60,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     _: JClass,
     handle: jlong,
 ) {
-    drop(unsafe { Box::from_raw(handle as *mut context::Context) });
+    drop(unsafe { Box::from_raw(handle as *mut pipeline::Context) });
 }
 
 #[unsafe(no_mangle)]
@@ -81,7 +79,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     forward_matrix_1: JFloatArray,
     forward_matrix_2: JFloatArray,
 ) {
-    let context = unsafe { &*(handle as *const context::Context) };
+    let context = unsafe { &*(handle as *const pipeline::Context) };
 
     let black_level = {
         let mut data = [0i32; 4];
@@ -110,7 +108,7 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
         data
     };
 
-    let mut finish = finish::Finish::new();
+    let mut finish = pipeline::Finish::new();
 
     finish.finish(
         &context,
