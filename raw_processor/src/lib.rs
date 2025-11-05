@@ -9,12 +9,14 @@ use jni::{
 use log::{LevelFilter, error, info};
 use vulkano::VulkanLibrary;
 
-mod pipeline;
+mod context;
+mod finish;
+mod stage;
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeInit(
-    _env: JNIEnv,
-    _class: JClass,
+    _: JNIEnv,
+    _: JClass,
 ) -> jlong {
     android_logger::init_once(
         Config::default()
@@ -49,24 +51,24 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     //
     // Initialized only once for the entire application lifetime
     //
-    let pipeline_context = pipeline::Context::new(library);
+    let pipeline_context = context::Context::new(library);
 
     Box::into_raw(pipeline_context) as jlong
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeFini(
-    _env: JNIEnv,
-    _class: JClass,
+    _: JNIEnv,
+    _: JClass,
     handle: jlong,
 ) {
-    drop(unsafe { Box::from_raw(handle as *mut pipeline::Context) });
+    drop(unsafe { Box::from_raw(handle as *mut context::Context) });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcessor_00024Companion_nativeProcess(
     env: JNIEnv,
-    _class: JClass,
+    _: JClass,
     handle: jlong,
     width: jint,
     height: jint,
@@ -79,45 +81,58 @@ pub extern "system" fn Java_com_mdnssknght_mycamera_processing_NativeRawProcesso
     forward_matrix_1: JFloatArray,
     forward_matrix_2: JFloatArray,
 ) {
-    let context = unsafe { &*(handle as *const pipeline::Context) };
+    let context = unsafe { &*(handle as *const context::Context) };
 
-    let mut black_level_data = [0i32; 4];
-    env.get_int_array_region(black_level, 0, &mut black_level_data)
-        .unwrap();
+    let black_level = {
+        let mut data = [0i32; 4];
+        env.get_int_array_region(black_level, 0, &mut data).unwrap();
+        data
+    };
 
-    let mut color_gains_data = [0f32; 4];
-    env.get_float_array_region(color_gains, 0, &mut color_gains_data)
-        .unwrap();
+    let color_gains = {
+        let mut data = [0f32; 4];
+        env.get_float_array_region(color_gains, 0, &mut data)
+            .unwrap();
+        data
+    };
 
-    let mut forward_matrix_1_data = [0f32; 9];
-    env.get_float_array_region(forward_matrix_1, 0, &mut forward_matrix_1_data)
-        .unwrap();
+    let forward_matrix_1 = {
+        let mut data = [0f32; 9];
+        env.get_float_array_region(forward_matrix_1, 0, &mut data)
+            .unwrap();
+        data
+    };
 
-    let mut forward_matrix_2_data = [0f32; 9];
-    env.get_float_array_region(forward_matrix_2, 0, &mut forward_matrix_2_data)
-        .unwrap();
+    let forward_matrix_2 = {
+        let mut data = [0f32; 9];
+        env.get_float_array_region(forward_matrix_2, 0, &mut data)
+            .unwrap();
+        data
+    };
 
-    let raw_finishing = pipeline::RawFinishing::new(
-        context,
+    let mut finish = finish::Finish::new();
+
+    finish.finish(
+        &context,
         env.get_direct_buffer_address(&data).unwrap(),
         env.get_direct_buffer_capacity(&data).unwrap(),
         [width, height],
-    );
-
-    raw_finishing.process(
-        context,
-        [width, height],
         color_filter_arrangement,
         white_level,
-        black_level_data,
-        color_gains_data,
-        forward_matrix_1_data,
-        forward_matrix_2_data,
+        black_level,
+        color_gains,
+        forward_matrix_1,
+        forward_matrix_2,
     );
 
-    let output_buffer = unsafe {
-        let buffer = raw_finishing.read_output_buffer();
-        slice::from_raw_parts(buffer.as_ptr() as *const jbyte, buffer.len())
+    let output_buffer = match finish.get_buffer_output() {
+        Some(buffer_guard) => {
+            let buffer = buffer_guard
+                .read()
+                .expect("Failed to lock buffer for reading");
+            unsafe { slice::from_raw_parts(buffer.as_ptr() as *const jbyte, buffer.len()) }
+        }
+        _ => panic!("Something went wrong"),
     };
 
     env.set_byte_array_region(out, 0, output_buffer).unwrap();

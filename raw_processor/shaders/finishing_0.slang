@@ -9,6 +9,5 @@ cbuffer Uniform { int2 shiftVector; }
 [NumThreads(8, 8, 1)]
 void computeMain(uint2 threadId: SV_DispatchThreadID) {
   int2 coordinates = threadId.xy;
-
   RawShifted[coordinates] = Raw[coordinates + shiftVector];
 }
