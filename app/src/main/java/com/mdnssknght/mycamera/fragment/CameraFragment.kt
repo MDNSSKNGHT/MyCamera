@@ -309,7 +309,7 @@ class CameraFragment : Fragment() {
                                 val bitmap = createBitmap(width, height)
                                     .apply { copyPixelsFromBuffer(outputBuffer) }
 
-                                val file = createFile(".jpg")
+                                val file = createFile("jpg")
                                 FileOutputStream(file).use { it ->
                                     bitmap.compress(
                                         Bitmap.CompressFormat.JPEG,
